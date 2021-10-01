@@ -33,14 +33,6 @@ int main() {
     return 1;
   }
 
-  auto *screenSurface = SDL_GetWindowSurface(window);
-  std::map<Color, Uint32> colorCodes;
-  colorCodes[Color::red] = SDL_MapRGB(screenSurface->format, 0xFF, 0, 0);
-  colorCodes[Color::green] = SDL_MapRGB(screenSurface->format, 0, 0xFF, 0);
-  colorCodes[Color::blue] = SDL_MapRGB(screenSurface->format, 0, 0, 0xFF);
-  colorCodes[Color::white] =
-      SDL_MapRGB(screenSurface->format, 0xFF, 0xFF, 0xFF);
-  auto colorCode{colorCodes.at(Color::white)};
   auto running{true};
   while (running) {
     SDL_Event event;
@@ -51,13 +43,10 @@ int main() {
       case SDLK_UP:
         break;
       case SDLK_DOWN:
-        colorCode = colorCodes.at(Color::green);
         break;
       case SDLK_LEFT:
-        colorCode = colorCodes.at(Color::blue);
         break;
       case SDLK_RIGHT:
-        colorCode = colorCodes.at(Color::red);
         break;
       default:
         break;
