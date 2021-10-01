@@ -10,5 +10,11 @@ FetchContent_Declare(
   GIT_TAG release-2.0.16)
 FetchContent_MakeAvailable(SDL2)
 
+FetchContent_Declare(
+  SDL_image
+  GIT_REPOSITORY https://github.com/madebr/SDL_image
+  GIT_TAG 3e63e767bd33f0ae00eee31c407e0a608422be47)
+FetchContent_MakeAvailable(SDL_image)
+
 add_executable(sbash64-sdl-learn-main main.cpp)
-target_link_libraries(sbash64-sdl-learn-main SDL2::SDL2)
+target_link_libraries(sbash64-sdl-learn-main SDL2::image SDL2::SDL2)
