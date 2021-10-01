@@ -118,27 +118,23 @@ auto run(const std::string &imagePath) -> int {
   auto running{true};
   auto x{15};
   auto y{15};
+  auto dotVelocity{0};
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       running = event.type != SDL_QUIT;
-    if (event.type == SDL_KEYDOWN)
-      switch (event.key.keysym.sym) {
-      case SDLK_UP:
-        --y;
-        break;
-      case SDLK_DOWN:
-        ++y;
-        break;
-      case SDLK_LEFT:
-        --x;
-        break;
-      case SDLK_RIGHT:
-        ++x;
-        break;
-      default:
-        break;
-      }
+    auto dotAcceleration{0};
+    const Uint8 *currentKeyStates = SDL_GetKeyboardState(nullptr);
+    if (currentKeyStates[SDL_SCANCODE_LEFT] != 0U)
+      --dotAcceleration;
+    else if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
+      ++dotAcceleration;
+    dotVelocity += dotAcceleration;
+    if (dotVelocity > 5)
+      dotVelocity = 5;
+    if (dotVelocity < -5)
+      dotVelocity = -5;
+    x += dotVelocity;
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_Rect renderQuad = {x, y, imageWidth, imageHeight};
