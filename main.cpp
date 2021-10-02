@@ -6,14 +6,69 @@
 #include <SDL_render.h>
 #include <SDL_stdinc.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
 namespace sbash64::game {
+struct RationalNumber {
+  int numerator;
+  int denominator;
+
+  auto operator==(const RationalNumber &) const -> bool = default;
+};
+
+constexpr auto operator+=(RationalNumber &a, RationalNumber b)
+    -> RationalNumber & {
+  const auto smallerDenominator{std::min(a.denominator, b.denominator)};
+  const auto largerDenominator{std::max(a.denominator, b.denominator)};
+  auto commonDenominator = smallerDenominator;
+  auto candidateDenominator = largerDenominator;
+  while (commonDenominator <
+             std::numeric_limits<int>::max() - smallerDenominator &&
+         candidateDenominator <
+             std::numeric_limits<int>::max() - largerDenominator) {
+    while (commonDenominator < candidateDenominator)
+      commonDenominator += smallerDenominator;
+    if (commonDenominator != candidateDenominator)
+      candidateDenominator += largerDenominator;
+    else {
+      a.numerator = a.numerator * commonDenominator / a.denominator +
+                    b.numerator * commonDenominator / b.denominator;
+      a.denominator = commonDenominator;
+      return a;
+    }
+  }
+  return a;
+}
+
+constexpr auto operator+(RationalNumber a, RationalNumber b) -> RationalNumber {
+  return a += b;
+}
+
+constexpr auto round(RationalNumber a) -> int {
+  return a.numerator / a.denominator +
+         (a.numerator % a.denominator >= (a.denominator + 1) / 2 ? 1 : 0);
+}
+
+static_assert(RationalNumber{3, 4} + RationalNumber{5, 6} ==
+                  RationalNumber{19, 12},
+              "rational number arithmetic error");
+
+static_assert(RationalNumber{4, 7} + RationalNumber{2, 3} ==
+                  RationalNumber{26, 21},
+              "rational number arithmetic error");
+
+static_assert(round(RationalNumber{19, 12}) == 2,
+              "rational number round error");
+
+static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
+
 constexpr auto screenWidth{640};
 constexpr auto screenHeight{480};
 
@@ -84,7 +139,7 @@ struct ImageSurface {
     }
   }
 
-  ~ImageSurface() {}
+  ~ImageSurface() { SDL_FreeSurface(surface); }
 
   SDL_Surface *surface;
 };
@@ -96,7 +151,6 @@ auto run(const std::string &imagePath) -> int {
   sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
-  SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
   constexpr auto imageFlags{IMG_INIT_PNG};
   if (!(IMG_Init(imageFlags) & imageFlags)) {
     std::stringstream stream;
@@ -116,42 +170,45 @@ auto run(const std::string &imagePath) -> int {
   const auto imageHeight{imageSurfaceWrapper.surface->h};
 
   auto running{true};
-  auto x{15};
-  auto y{215};
+  auto x{0};
+  auto y{screenHeight - imageHeight};
   auto horizontalVelocity{0};
-  auto verticalVelocity{0};
+  RationalNumber verticalVelocity{0, 1};
   auto initiatedJump{false};
+  RationalNumber gravity{1, 2};
+  auto friction{1};
+  auto maxHorizontalSpeed{6};
+  RationalNumber jumpAcceleration{-10, 1};
+  auto runAcceleration{2};
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       running = event.type != SDL_QUIT;
-    auto runAcceleration{0};
     const Uint8 *currentKeyStates = SDL_GetKeyboardState(nullptr);
     if (currentKeyStates[SDL_SCANCODE_LEFT] != 0U)
-      runAcceleration -= 2;
+      horizontalVelocity -= runAcceleration;
     if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
-      runAcceleration += 2;
+      horizontalVelocity += runAcceleration;
     if (currentKeyStates[SDL_SCANCODE_UP] != 0U && !initiatedJump) {
       initiatedJump = true;
-      verticalVelocity = -10;
+      verticalVelocity += jumpAcceleration;
     }
-    horizontalVelocity += runAcceleration;
-    if (horizontalVelocity > 6)
-      horizontalVelocity = 6;
-    if (horizontalVelocity < -6)
-      horizontalVelocity = -6;
+    if (horizontalVelocity > maxHorizontalSpeed)
+      horizontalVelocity = maxHorizontalSpeed;
+    if (horizontalVelocity < -maxHorizontalSpeed)
+      horizontalVelocity = -maxHorizontalSpeed;
     if (horizontalVelocity > 0)
-      horizontalVelocity -= 1;
+      horizontalVelocity -= friction;
     if (horizontalVelocity < 0)
-      horizontalVelocity += 1;
-    verticalVelocity += 1;
-    if (verticalVelocity + y > 215) {
-      verticalVelocity = 0;
-      y = 215;
+      horizontalVelocity += friction;
+    verticalVelocity += gravity;
+    if (round(verticalVelocity) + y > screenHeight - imageHeight) {
+      verticalVelocity = {0, 1};
+      y = screenHeight - imageHeight;
       initiatedJump = false;
     }
     x += horizontalVelocity;
-    y += verticalVelocity;
+    y += round(verticalVelocity);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_Rect renderQuad = {x, y, imageWidth, imageHeight};
