@@ -29,22 +29,24 @@ constexpr auto operator+=(RationalNumber &a, RationalNumber b)
   const auto largerDenominator{std::max(a.denominator, b.denominator)};
   auto commonDenominator = smallerDenominator;
   auto candidateDenominator = largerDenominator;
-  while (commonDenominator <
-             std::numeric_limits<int>::max() - smallerDenominator &&
-         candidateDenominator <
-             std::numeric_limits<int>::max() - largerDenominator) {
-    while (commonDenominator < candidateDenominator)
+  while (true) {
+    while (commonDenominator <
+           std::min(std::numeric_limits<int>::max() - smallerDenominator,
+                    candidateDenominator))
       commonDenominator += smallerDenominator;
-    if (commonDenominator != candidateDenominator)
-      candidateDenominator += largerDenominator;
-    else {
+    if (commonDenominator != candidateDenominator) {
+      if (candidateDenominator <
+          std::numeric_limits<int>::max() - largerDenominator)
+        candidateDenominator += largerDenominator;
+      else
+        return a;
+    } else {
       a.numerator = a.numerator * commonDenominator / a.denominator +
                     b.numerator * commonDenominator / b.denominator;
       a.denominator = commonDenominator;
       return a;
     }
   }
-  return a;
 }
 
 constexpr auto operator+(RationalNumber a, RationalNumber b) -> RationalNumber {
