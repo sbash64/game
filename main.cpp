@@ -117,24 +117,41 @@ auto run(const std::string &imagePath) -> int {
 
   auto running{true};
   auto x{15};
-  auto y{15};
-  auto dotVelocity{0};
+  auto y{215};
+  auto horizontalVelocity{0};
+  auto verticalVelocity{0};
+  auto initiatedJump{false};
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       running = event.type != SDL_QUIT;
-    auto dotAcceleration{0};
+    auto runAcceleration{0};
     const Uint8 *currentKeyStates = SDL_GetKeyboardState(nullptr);
     if (currentKeyStates[SDL_SCANCODE_LEFT] != 0U)
-      --dotAcceleration;
-    else if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
-      ++dotAcceleration;
-    dotVelocity += dotAcceleration;
-    if (dotVelocity > 5)
-      dotVelocity = 5;
-    if (dotVelocity < -5)
-      dotVelocity = -5;
-    x += dotVelocity;
+      runAcceleration -= 2;
+    if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
+      runAcceleration += 2;
+    if (currentKeyStates[SDL_SCANCODE_UP] != 0U && !initiatedJump) {
+      initiatedJump = true;
+      verticalVelocity = -10;
+    }
+    horizontalVelocity += runAcceleration;
+    if (horizontalVelocity > 6)
+      horizontalVelocity = 6;
+    if (horizontalVelocity < -6)
+      horizontalVelocity = -6;
+    if (horizontalVelocity > 0)
+      horizontalVelocity -= 1;
+    if (horizontalVelocity < 0)
+      horizontalVelocity += 1;
+    verticalVelocity += 1;
+    if (verticalVelocity + y > 215) {
+      verticalVelocity = 0;
+      y = 215;
+      initiatedJump = false;
+    }
+    x += horizontalVelocity;
+    y += verticalVelocity;
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_Rect renderQuad = {x, y, imageWidth, imageHeight};
