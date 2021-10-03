@@ -147,6 +147,8 @@ struct ImageSurface {
 };
 } // namespace sdl_wrappers
 
+enum class JumpState { grounded, started, released };
+
 auto run(const std::string &imagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   sdl_wrappers::Window windowWrapper;
@@ -176,8 +178,7 @@ auto run(const std::string &imagePath) -> int {
   auto y{screenHeight - imageHeight};
   auto horizontalVelocity{0};
   RationalNumber verticalVelocity{0, 1};
-  auto initiatedJump{false};
-  auto releasedJump{false};
+  auto jumpState{JumpState::grounded};
   RationalNumber gravity{1, 2};
   auto friction{1};
   auto maxHorizontalSpeed{6};
@@ -192,14 +193,15 @@ auto run(const std::string &imagePath) -> int {
       horizontalVelocity -= runAcceleration;
     if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
       horizontalVelocity += runAcceleration;
-    if (currentKeyStates[SDL_SCANCODE_UP] != 0U && !initiatedJump) {
-      initiatedJump = true;
+    if (currentKeyStates[SDL_SCANCODE_UP] != 0U &&
+        jumpState == JumpState::grounded) {
+      jumpState = JumpState::started;
       verticalVelocity += jumpAcceleration;
     }
     verticalVelocity += gravity;
-    if (currentKeyStates[SDL_SCANCODE_UP] == 0U && initiatedJump &&
-        !releasedJump) {
-      releasedJump = true;
+    if (currentKeyStates[SDL_SCANCODE_UP] == 0U &&
+        jumpState == JumpState::started) {
+      jumpState = JumpState::released;
       if (verticalVelocity.numerator < 0)
         verticalVelocity = {0, 1};
     }
@@ -214,8 +216,7 @@ auto run(const std::string &imagePath) -> int {
     if (round(verticalVelocity) + y > screenHeight - imageHeight) {
       verticalVelocity = {0, 1};
       y = screenHeight - imageHeight;
-      initiatedJump = false;
-      releasedJump = false;
+      jumpState = JumpState::grounded;
     }
     x += horizontalVelocity;
     y += round(verticalVelocity);
