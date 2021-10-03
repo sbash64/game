@@ -1,3 +1,4 @@
+#include "SDL_scancode.h"
 #include <SDL.h>
 #include <SDL_events.h>
 #include <SDL_hints.h>
@@ -149,6 +150,10 @@ struct ImageSurface {
 
 enum class JumpState { grounded, started, released };
 
+static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
+  return keyStates[code] != 0U;
+}
+
 auto run(const std::string &imagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   sdl_wrappers::Window windowWrapper;
@@ -173,7 +178,7 @@ auto run(const std::string &imagePath) -> int {
   const auto imageWidth{imageSurfaceWrapper.surface->w};
   const auto imageHeight{imageSurfaceWrapper.surface->h};
 
-  auto running{true};
+  auto playing{true};
   auto x{0};
   auto y{screenHeight - imageHeight};
   auto horizontalVelocity{0};
@@ -184,22 +189,22 @@ auto run(const std::string &imagePath) -> int {
   auto maxHorizontalSpeed{6};
   RationalNumber jumpAcceleration{-10, 1};
   auto runAcceleration{2};
-  while (running) {
+  while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
-      running = event.type != SDL_QUIT;
-    const Uint8 *currentKeyStates = SDL_GetKeyboardState(nullptr);
-    if (currentKeyStates[SDL_SCANCODE_LEFT] != 0U)
+      playing = event.type != SDL_QUIT;
+    const auto *currentKeyStates{SDL_GetKeyboardState(nullptr)};
+    if (pressing(currentKeyStates, SDL_SCANCODE_LEFT))
       horizontalVelocity -= runAcceleration;
-    if (currentKeyStates[SDL_SCANCODE_RIGHT] != 0U)
+    if (pressing(currentKeyStates, SDL_SCANCODE_RIGHT))
       horizontalVelocity += runAcceleration;
-    if (currentKeyStates[SDL_SCANCODE_UP] != 0U &&
+    if (pressing(currentKeyStates, SDL_SCANCODE_UP) &&
         jumpState == JumpState::grounded) {
       jumpState = JumpState::started;
       verticalVelocity += jumpAcceleration;
     }
     verticalVelocity += gravity;
-    if (currentKeyStates[SDL_SCANCODE_UP] == 0U &&
+    if (!pressing(currentKeyStates, SDL_SCANCODE_UP) &&
         jumpState == JumpState::started) {
       jumpState = JumpState::released;
       if (verticalVelocity.numerator < 0)
