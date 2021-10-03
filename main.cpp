@@ -1,10 +1,10 @@
-#include "SDL_surface.h"
 #include <SDL.h>
 #include <SDL_events.h>
 #include <SDL_hints.h>
 #include <SDL_image.h>
 #include <SDL_render.h>
 #include <SDL_stdinc.h>
+#include <SDL_surface.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -177,6 +177,7 @@ auto run(const std::string &imagePath) -> int {
   auto horizontalVelocity{0};
   RationalNumber verticalVelocity{0, 1};
   auto initiatedJump{false};
+  auto releasedJump{false};
   RationalNumber gravity{1, 2};
   auto friction{1};
   auto maxHorizontalSpeed{6};
@@ -195,6 +196,13 @@ auto run(const std::string &imagePath) -> int {
       initiatedJump = true;
       verticalVelocity += jumpAcceleration;
     }
+    verticalVelocity += gravity;
+    if (currentKeyStates[SDL_SCANCODE_UP] == 0U && initiatedJump &&
+        !releasedJump) {
+      releasedJump = true;
+      if (verticalVelocity.numerator < 0)
+        verticalVelocity = {0, 1};
+    }
     if (horizontalVelocity > maxHorizontalSpeed)
       horizontalVelocity = maxHorizontalSpeed;
     if (horizontalVelocity < -maxHorizontalSpeed)
@@ -203,11 +211,11 @@ auto run(const std::string &imagePath) -> int {
       horizontalVelocity -= friction;
     if (horizontalVelocity < 0)
       horizontalVelocity += friction;
-    verticalVelocity += gravity;
     if (round(verticalVelocity) + y > screenHeight - imageHeight) {
       verticalVelocity = {0, 1};
       y = screenHeight - imageHeight;
       initiatedJump = false;
+      releasedJump = false;
     }
     x += horizontalVelocity;
     y += round(verticalVelocity);
