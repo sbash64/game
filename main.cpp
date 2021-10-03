@@ -185,7 +185,7 @@ auto run(const std::string &imagePath) -> int {
   RationalNumber verticalVelocity{0, 1};
   auto jumpState{JumpState::grounded};
   RationalNumber gravity{1, 2};
-  auto friction{1};
+  auto groundFriction{1};
   auto maxHorizontalSpeed{6};
   RationalNumber jumpAcceleration{-10, 1};
   auto runAcceleration{2};
@@ -193,18 +193,18 @@ auto run(const std::string &imagePath) -> int {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       playing = event.type != SDL_QUIT;
-    const auto *currentKeyStates{SDL_GetKeyboardState(nullptr)};
-    if (pressing(currentKeyStates, SDL_SCANCODE_LEFT))
+    const auto *keyStates{SDL_GetKeyboardState(nullptr)};
+    if (pressing(keyStates, SDL_SCANCODE_LEFT))
       horizontalVelocity -= runAcceleration;
-    if (pressing(currentKeyStates, SDL_SCANCODE_RIGHT))
+    if (pressing(keyStates, SDL_SCANCODE_RIGHT))
       horizontalVelocity += runAcceleration;
-    if (pressing(currentKeyStates, SDL_SCANCODE_UP) &&
+    if (pressing(keyStates, SDL_SCANCODE_UP) &&
         jumpState == JumpState::grounded) {
       jumpState = JumpState::started;
       verticalVelocity += jumpAcceleration;
     }
     verticalVelocity += gravity;
-    if (!pressing(currentKeyStates, SDL_SCANCODE_UP) &&
+    if (!pressing(keyStates, SDL_SCANCODE_UP) &&
         jumpState == JumpState::started) {
       jumpState = JumpState::released;
       if (verticalVelocity.numerator < 0)
@@ -215,9 +215,9 @@ auto run(const std::string &imagePath) -> int {
     if (horizontalVelocity < -maxHorizontalSpeed)
       horizontalVelocity = -maxHorizontalSpeed;
     if (horizontalVelocity > 0)
-      horizontalVelocity -= friction;
+      horizontalVelocity -= groundFriction;
     if (horizontalVelocity < 0)
-      horizontalVelocity += friction;
+      horizontalVelocity += groundFriction;
     if (round(verticalVelocity) + y > screenHeight - imageHeight) {
       verticalVelocity = {0, 1};
       y = screenHeight - imageHeight;
@@ -227,7 +227,7 @@ auto run(const std::string &imagePath) -> int {
     y += round(verticalVelocity);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
-    SDL_Rect renderQuad = {x, y, imageWidth, imageHeight};
+    const SDL_Rect renderQuad{x, y, imageWidth, imageHeight};
     SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture, nullptr,
                      &renderQuad, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
