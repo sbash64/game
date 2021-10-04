@@ -221,18 +221,15 @@ static auto run(const std::string &imagePath) -> int {
     }
     if (playerHorizontalVelocity > playerMaxHorizontalSpeed)
       playerHorizontalVelocity = playerMaxHorizontalSpeed;
-    if (playerHorizontalVelocity < -playerMaxHorizontalSpeed)
+    else if (playerHorizontalVelocity < -playerMaxHorizontalSpeed)
       playerHorizontalVelocity = -playerMaxHorizontalSpeed;
     if (playerHorizontalVelocity > 0)
       playerHorizontalVelocity -=
           std::min(playerHorizontalVelocity, groundFriction);
-    if (playerHorizontalVelocity < 0)
+    else if (playerHorizontalVelocity < 0)
       playerHorizontalVelocity -=
           std::max(playerHorizontalVelocity, -groundFriction);
     const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
-    if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight)
-      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
-                        playerHeight, screenHeight);
     const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
     const auto wallLeftEdge{wallRect.x};
     const auto wallRightEdge{wallLeftEdge + wallRect.w - 1};
@@ -244,18 +241,24 @@ static auto run(const std::string &imagePath) -> int {
     const auto playerWillBeBelowWallsTopEdge{
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
+    const auto playerWillBeBelowGround{
+        round(playerVerticalVelocity) + playerBottomEdge >= screenHeight};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge)
       onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
                         playerHeight, wallTopEdge);
+    else if (playerWillBeBelowGround)
+      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
+                        playerHeight, screenHeight);
+    else
+      playerTopEdge += round(playerVerticalVelocity);
     const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
       playerLeftEdge = wallLeftEdge - playerWidth;
-    }
-    playerLeftEdge += playerHorizontalVelocity;
-    playerTopEdge += round(playerVerticalVelocity);
+    } else
+      playerLeftEdge += playerHorizontalVelocity;
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
