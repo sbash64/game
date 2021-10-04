@@ -179,8 +179,8 @@ auto run(const std::string &imagePath) -> int {
   const auto playerHeight{imageSurfaceWrapper.surface->h};
 
   auto playing{true};
-  auto playerX{0};
-  auto playerY{screenHeight - playerHeight};
+  auto playerLeftEdge{0};
+  auto playerTopEdge{screenHeight - playerHeight};
   auto playerHorizontalVelocity{0};
   RationalNumber playerVerticalVelocity{0, 1};
   auto playerJumpState{JumpState::grounded};
@@ -219,35 +219,37 @@ auto run(const std::string &imagePath) -> int {
       playerHorizontalVelocity -= groundFriction;
     if (playerHorizontalVelocity < 0)
       playerHorizontalVelocity += groundFriction;
-    if (round(playerVerticalVelocity) + playerY > screenHeight - playerHeight) {
+    const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
+    const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
+    if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight) {
       playerVerticalVelocity = {0, 1};
-      playerY = screenHeight - playerHeight;
+      playerTopEdge = screenHeight - playerHeight;
       playerJumpState = JumpState::grounded;
     }
-    const auto playerBottomEdge{playerY + playerHeight - 1};
-    const auto playerRightEdge{playerX + playerWidth - 1};
     if (playerBottomEdge < wallRect.y &&
         playerBottomEdge + round(playerVerticalVelocity) >= wallRect.y &&
         playerRightEdge + playerHorizontalVelocity >= wallRect.x &&
-        playerX + playerHorizontalVelocity <= wallRect.x + wallRect.w - 1) {
+        playerLeftEdge + playerHorizontalVelocity <=
+            wallRect.x + wallRect.w - 1) {
       playerVerticalVelocity = {0, 1};
-      playerY = wallRect.y - playerHeight;
+      playerTopEdge = wallRect.y - playerHeight;
       playerJumpState = JumpState::grounded;
     }
     if (playerRightEdge < wallRect.x &&
         playerRightEdge + playerHorizontalVelocity >= wallRect.x &&
-        playerY + round(playerVerticalVelocity) + playerHeight - 1 >=
+        playerTopEdge + round(playerVerticalVelocity) + playerHeight - 1 >=
             wallRect.y) {
       playerHorizontalVelocity = 0;
-      playerX = wallRect.x - playerWidth;
+      playerLeftEdge = wallRect.x - playerWidth;
     }
-    playerX += playerHorizontalVelocity;
-    playerY += round(playerVerticalVelocity);
+    playerLeftEdge += playerHorizontalVelocity;
+    playerTopEdge += round(playerVerticalVelocity);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(rendererWrapper.renderer, &wallRect);
-    const SDL_Rect playerRect{playerX, playerY, playerWidth, playerHeight};
+    const SDL_Rect playerRect{playerLeftEdge, playerTopEdge, playerWidth,
+                              playerHeight};
     SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture, nullptr,
                      &playerRect, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
