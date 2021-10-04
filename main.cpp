@@ -224,8 +224,18 @@ auto run(const std::string &imagePath) -> int {
       playerY = screenHeight - playerHeight;
       playerJumpState = JumpState::grounded;
     }
-    if (playerX + playerWidth - 1 < wallRect.x &&
-        playerX + playerHorizontalVelocity + playerWidth - 1 >= wallRect.x &&
+    const auto playerBottomEdge{playerY + playerHeight - 1};
+    const auto playerRightEdge{playerX + playerWidth - 1};
+    if (playerBottomEdge < wallRect.y &&
+        playerBottomEdge + round(playerVerticalVelocity) >= wallRect.y &&
+        playerRightEdge + playerHorizontalVelocity >= wallRect.x &&
+        playerX + playerHorizontalVelocity <= wallRect.x + wallRect.w - 1) {
+      playerVerticalVelocity = {0, 1};
+      playerY = wallRect.y - playerHeight;
+      playerJumpState = JumpState::grounded;
+    }
+    if (playerRightEdge < wallRect.x &&
+        playerRightEdge + playerHorizontalVelocity >= wallRect.x &&
         playerY + round(playerVerticalVelocity) + playerHeight - 1 >=
             wallRect.y) {
       playerHorizontalVelocity = 0;
