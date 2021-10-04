@@ -233,13 +233,13 @@ static auto run(const std::string &imagePath) -> int {
     const auto wallTopEdge{wallRect.y};
     const auto playerWillBeRightOfWallsLeftEdge{
         playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
-    const auto playerWillLeftOfWallsRightEdge{
+    const auto playerWillBeLeftOfWallsRightEdge{
         playerLeftEdge + playerHorizontalVelocity <= wallRightEdge};
     const auto playerWillBeBelowWallsTopEdge{
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
-        playerWillBeRightOfWallsLeftEdge && playerWillLeftOfWallsRightEdge) {
+        playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge) {
       playerVerticalVelocity = {0, 1};
       playerTopEdge = wallTopEdge - playerHeight;
       playerJumpState = JumpState::grounded;
