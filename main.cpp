@@ -228,23 +228,27 @@ static auto run(const std::string &imagePath) -> int {
       playerJumpState = JumpState::grounded;
     }
     const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
-    const auto wallRightEdge{wallRect.x + wallRect.w - 1};
+    const auto wallLeftEdge{wallRect.x};
+    const auto wallRightEdge{wallLeftEdge + wallRect.w - 1};
+    const auto wallTopEdge{wallRect.y};
     const auto playerWillBeRightOfWallsLeftEdge{
-        playerRightEdge + playerHorizontalVelocity >= wallRect.x};
+        playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
     const auto playerWillLeftOfWallsRightEdge{
         playerLeftEdge + playerHorizontalVelocity <= wallRightEdge};
     const auto playerWillBeBelowWallsTopEdge{
-        playerBottomEdge + round(playerVerticalVelocity) >= wallRect.y};
-    if (playerBottomEdge < wallRect.y && playerWillBeBelowWallsTopEdge &&
+        playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
+    const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
+    if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         playerWillBeRightOfWallsLeftEdge && playerWillLeftOfWallsRightEdge) {
       playerVerticalVelocity = {0, 1};
-      playerTopEdge = wallRect.y - playerHeight;
+      playerTopEdge = wallTopEdge - playerHeight;
       playerJumpState = JumpState::grounded;
     }
-    if (playerRightEdge < wallRect.x && playerWillBeRightOfWallsLeftEdge &&
+    const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
+    if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
-      playerLeftEdge = wallRect.x - playerWidth;
+      playerLeftEdge = wallLeftEdge - playerWidth;
     }
     playerLeftEdge += playerHorizontalVelocity;
     playerTopEdge += round(playerVerticalVelocity);
