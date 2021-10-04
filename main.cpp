@@ -72,8 +72,8 @@ static_assert(round(RationalNumber{19, 12}) == 2,
 
 static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
 
-constexpr auto screenWidth{640};
-constexpr auto screenHeight{480};
+constexpr auto screenWidth{960};
+constexpr auto screenHeight{540};
 
 enum class Color { red, blue, green, white };
 
@@ -175,61 +175,71 @@ auto run(const std::string &imagePath) -> int {
 
   sdl_wrappers::Texture textureWrapper{rendererWrapper.renderer,
                                        imageSurfaceWrapper.surface};
-  const auto imageWidth{imageSurfaceWrapper.surface->w};
-  const auto imageHeight{imageSurfaceWrapper.surface->h};
+  const auto playerWidth{imageSurfaceWrapper.surface->w};
+  const auto playerHeight{imageSurfaceWrapper.surface->h};
 
   auto playing{true};
-  auto x{0};
-  auto y{screenHeight - imageHeight};
-  auto horizontalVelocity{0};
-  RationalNumber verticalVelocity{0, 1};
-  auto jumpState{JumpState::grounded};
+  auto playerX{0};
+  auto playerY{screenHeight - playerHeight};
+  auto playerHorizontalVelocity{0};
+  RationalNumber playerVerticalVelocity{0, 1};
+  auto playerJumpState{JumpState::grounded};
   RationalNumber gravity{1, 2};
   auto groundFriction{1};
-  auto maxHorizontalSpeed{6};
-  RationalNumber jumpAcceleration{-10, 1};
-  auto runAcceleration{2};
+  auto playerMaxHorizontalSpeed{6};
+  RationalNumber playerJumpAcceleration{-10, 1};
+  auto playerRunAcceleration{2};
+  const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       playing = event.type != SDL_QUIT;
     const auto *keyStates{SDL_GetKeyboardState(nullptr)};
     if (pressing(keyStates, SDL_SCANCODE_LEFT))
-      horizontalVelocity -= runAcceleration;
+      playerHorizontalVelocity -= playerRunAcceleration;
     if (pressing(keyStates, SDL_SCANCODE_RIGHT))
-      horizontalVelocity += runAcceleration;
+      playerHorizontalVelocity += playerRunAcceleration;
     if (pressing(keyStates, SDL_SCANCODE_UP) &&
-        jumpState == JumpState::grounded) {
-      jumpState = JumpState::started;
-      verticalVelocity += jumpAcceleration;
+        playerJumpState == JumpState::grounded) {
+      playerJumpState = JumpState::started;
+      playerVerticalVelocity += playerJumpAcceleration;
     }
-    verticalVelocity += gravity;
+    playerVerticalVelocity += gravity;
     if (!pressing(keyStates, SDL_SCANCODE_UP) &&
-        jumpState == JumpState::started) {
-      jumpState = JumpState::released;
-      if (verticalVelocity.numerator < 0)
-        verticalVelocity = {0, 1};
+        playerJumpState == JumpState::started) {
+      playerJumpState = JumpState::released;
+      if (playerVerticalVelocity.numerator < 0)
+        playerVerticalVelocity = {0, 1};
     }
-    if (horizontalVelocity > maxHorizontalSpeed)
-      horizontalVelocity = maxHorizontalSpeed;
-    if (horizontalVelocity < -maxHorizontalSpeed)
-      horizontalVelocity = -maxHorizontalSpeed;
-    if (horizontalVelocity > 0)
-      horizontalVelocity -= groundFriction;
-    if (horizontalVelocity < 0)
-      horizontalVelocity += groundFriction;
-    if (round(verticalVelocity) + y > screenHeight - imageHeight) {
-      verticalVelocity = {0, 1};
-      y = screenHeight - imageHeight;
-      jumpState = JumpState::grounded;
+    if (playerHorizontalVelocity > playerMaxHorizontalSpeed)
+      playerHorizontalVelocity = playerMaxHorizontalSpeed;
+    if (playerHorizontalVelocity < -playerMaxHorizontalSpeed)
+      playerHorizontalVelocity = -playerMaxHorizontalSpeed;
+    if (playerHorizontalVelocity > 0)
+      playerHorizontalVelocity -= groundFriction;
+    if (playerHorizontalVelocity < 0)
+      playerHorizontalVelocity += groundFriction;
+    if (round(playerVerticalVelocity) + playerY > screenHeight - playerHeight) {
+      playerVerticalVelocity = {0, 1};
+      playerY = screenHeight - playerHeight;
+      playerJumpState = JumpState::grounded;
     }
-    x += horizontalVelocity;
-    y += round(verticalVelocity);
+    if (playerX + playerWidth - 1 < wallRect.x &&
+        playerX + playerHorizontalVelocity + playerWidth - 1 >= wallRect.x &&
+        playerY + round(playerVerticalVelocity) + playerHeight - 1 >=
+            wallRect.y) {
+      playerHorizontalVelocity = 0;
+      playerX = wallRect.x - playerWidth;
+    }
+    playerX += playerHorizontalVelocity;
+    playerY += round(playerVerticalVelocity);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
-    const SDL_Rect renderQuad{x, y, imageWidth, imageHeight};
+    SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
+    SDL_RenderFillRect(rendererWrapper.renderer, &wallRect);
+    const SDL_Rect playerRect{playerX, playerY, playerWidth, playerHeight};
     SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture, nullptr,
-                     &renderQuad, 0, nullptr, SDL_FLIP_NONE);
+                     &playerRect, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   return EXIT_SUCCESS;
