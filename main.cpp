@@ -154,6 +154,14 @@ static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
 
+static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
+                              int &playerTopEdge, JumpState &playerJumpState,
+                              int playerHeight, int ground) {
+  playerVerticalVelocity = {0, 1};
+  playerTopEdge = ground - playerHeight;
+  playerJumpState = JumpState::grounded;
+}
+
 static auto run(const std::string &imagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   sdl_wrappers::Window windowWrapper;
@@ -222,11 +230,9 @@ static auto run(const std::string &imagePath) -> int {
       playerHorizontalVelocity -=
           std::max(playerHorizontalVelocity, -groundFriction);
     const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
-    if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight) {
-      playerVerticalVelocity = {0, 1};
-      playerTopEdge = screenHeight - playerHeight;
-      playerJumpState = JumpState::grounded;
-    }
+    if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight)
+      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
+                        playerHeight, screenHeight);
     const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
     const auto wallLeftEdge{wallRect.x};
     const auto wallRightEdge{wallLeftEdge + wallRect.w - 1};
@@ -239,11 +245,9 @@ static auto run(const std::string &imagePath) -> int {
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
-        playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge) {
-      playerVerticalVelocity = {0, 1};
-      playerTopEdge = wallTopEdge - playerHeight;
-      playerJumpState = JumpState::grounded;
-    }
+        playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge)
+      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
+                        playerHeight, wallTopEdge);
     const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
