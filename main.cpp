@@ -216,9 +216,11 @@ static auto run(const std::string &imagePath) -> int {
     if (playerHorizontalVelocity < -playerMaxHorizontalSpeed)
       playerHorizontalVelocity = -playerMaxHorizontalSpeed;
     if (playerHorizontalVelocity > 0)
-      playerHorizontalVelocity -= groundFriction;
+      playerHorizontalVelocity -=
+          std::min(playerHorizontalVelocity, groundFriction);
     if (playerHorizontalVelocity < 0)
-      playerHorizontalVelocity += groundFriction;
+      playerHorizontalVelocity +=
+          std::min(-playerHorizontalVelocity, groundFriction);
     const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
     if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight) {
       playerVerticalVelocity = {0, 1};
