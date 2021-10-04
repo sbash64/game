@@ -253,10 +253,15 @@ static auto run(const std::string &imagePath) -> int {
     else
       playerTopEdge += round(playerVerticalVelocity);
     const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
+    const auto playerIsRightOfWall{playerLeftEdge > wallRightEdge};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
       playerLeftEdge = wallLeftEdge - playerWidth;
+    } else if (playerIsRightOfWall && playerWillBeLeftOfWallsRightEdge &&
+               playerWillBeBelowWallsTopEdge) {
+      playerHorizontalVelocity = 0;
+      playerLeftEdge = wallRightEdge + 1;
     } else
       playerLeftEdge += playerHorizontalVelocity;
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
