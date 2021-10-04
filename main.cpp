@@ -1,9 +1,9 @@
-#include "SDL_scancode.h"
 #include <SDL.h>
 #include <SDL_events.h>
 #include <SDL_hints.h>
 #include <SDL_image.h>
 #include <SDL_render.h>
+#include <SDL_scancode.h>
 #include <SDL_stdinc.h>
 #include <SDL_surface.h>
 
@@ -154,7 +154,7 @@ static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
 
-auto run(const std::string &imagePath) -> int {
+static auto run(const std::string &imagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   sdl_wrappers::Window windowWrapper;
   sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
@@ -187,7 +187,7 @@ auto run(const std::string &imagePath) -> int {
   RationalNumber gravity{1, 2};
   auto groundFriction{1};
   auto playerMaxHorizontalSpeed{6};
-  RationalNumber playerJumpAcceleration{-10, 1};
+  RationalNumber playerJumpAcceleration{-15, 1};
   auto playerRunAcceleration{2};
   const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
   while (playing) {
@@ -220,17 +220,17 @@ auto run(const std::string &imagePath) -> int {
     if (playerHorizontalVelocity < 0)
       playerHorizontalVelocity += groundFriction;
     const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
-    const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
     if (round(playerVerticalVelocity) + playerBottomEdge >= screenHeight) {
       playerVerticalVelocity = {0, 1};
       playerTopEdge = screenHeight - playerHeight;
       playerJumpState = JumpState::grounded;
     }
+    const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
+    const auto wallRightEdge{wallRect.x + wallRect.w - 1};
     if (playerBottomEdge < wallRect.y &&
         playerBottomEdge + round(playerVerticalVelocity) >= wallRect.y &&
         playerRightEdge + playerHorizontalVelocity >= wallRect.x &&
-        playerLeftEdge + playerHorizontalVelocity <=
-            wallRect.x + wallRect.w - 1) {
+        playerLeftEdge + playerHorizontalVelocity <= wallRightEdge) {
       playerVerticalVelocity = {0, 1};
       playerTopEdge = wallRect.y - playerHeight;
       playerJumpState = JumpState::grounded;
