@@ -278,11 +278,16 @@ static auto run(const std::string &playerImagePath,
     const auto backgroundLeftEdge{backgroundRect.x};
     const auto backgroundRightEdge{backgroundLeftEdge + backgroundRect.w - 1};
     if (playerDistanceRightOfCenter > 0 &&
-        backgroundRightEdge < backgroundWidth) {
+        backgroundRightEdge < backgroundWidth - 1) {
       backgroundRect.x += std::min(backgroundWidth - backgroundRightEdge - 1,
                                    playerDistanceRightOfCenter);
       playerLeftEdge -= std::min(backgroundWidth - backgroundRightEdge - 1,
                                  playerDistanceRightOfCenter);
+    } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
+      backgroundRect.x +=
+          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
+      playerLeftEdge -=
+          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
     }
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
