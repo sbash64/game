@@ -2,6 +2,7 @@
 #include <SDL_events.h>
 #include <SDL_hints.h>
 #include <SDL_image.h>
+#include <SDL_pixels.h>
 #include <SDL_render.h>
 #include <SDL_scancode.h>
 #include <SDL_stdinc.h>
@@ -15,6 +16,38 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+// https://stackoverflow.com/a/53067795
+static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
+  int bpp = surface->format->BytesPerPixel;
+  /* Here p is the address to the pixel we want to retrieve */
+  const auto *p = static_cast<const Uint8 *>(surface->pixels) +
+                  y * surface->pitch + x * bpp;
+
+  switch (bpp) {
+  case 1:
+    return *p;
+    break;
+
+  case 2:
+    return *(Uint16 *)p;
+    break;
+
+  case 3:
+    if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
+      return p[0] << 16 | p[1] << 8 | p[2];
+    else
+      return p[0] | p[1] << 8 | p[2] << 16;
+    break;
+
+  case 4:
+    return *(Uint32 *)p;
+    break;
+
+  default:
+    return 0; /* shouldn't happen, but avoids warnings */
+  }
+}
 
 namespace sbash64::game {
 struct RationalNumber {
@@ -72,8 +105,9 @@ static_assert(round(RationalNumber{19, 12}) == 2,
 
 static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
 
-constexpr auto screenWidth{960};
-constexpr auto screenHeight{540};
+constexpr auto pixelScale{4};
+constexpr auto screenWidth{256 * pixelScale};
+constexpr auto screenHeight{240 * pixelScale};
 
 enum class Color { red, blue, green, white };
 
@@ -178,11 +212,11 @@ static auto run(const std::string &playerImagePath,
   }
 
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
-  SDL_SetColorKey(
-      playerImageSurfaceWrapper.surface, SDL_TRUE,
-      SDL_MapRGB(playerImageSurfaceWrapper.surface->format, 0, 0, 0));
-  const auto playerWidth{playerImageSurfaceWrapper.surface->w};
-  const auto playerHeight{playerImageSurfaceWrapper.surface->h};
+  SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
+                  getpixel(playerImageSurfaceWrapper.surface, 1, 9));
+  const auto playerWidth{12 * pixelScale};
+  const auto playerHeight{16 * pixelScale};
+  const SDL_Rect marioSourceRect{3, 9, 12, 16};
 
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundWidth{backgroundImageSurfaceWrapper.surface->w};
@@ -206,7 +240,7 @@ static auto run(const std::string &playerImagePath,
   auto playerRunAcceleration{2};
   const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
   const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
-  SDL_Rect backgroundRect{wholeScreen};
+  SDL_Rect backgroundRect{0, 0, 256, 240};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
@@ -298,7 +332,7 @@ static auto run(const std::string &playerImagePath,
     const SDL_Rect playerRect{playerLeftEdge, playerTopEdge, playerWidth,
                               playerHeight};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
-                     nullptr, &playerRect, 0, nullptr, SDL_FLIP_NONE);
+                     &marioSourceRect, &playerRect, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   return EXIT_SUCCESS;
