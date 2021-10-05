@@ -207,19 +207,21 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));
+  const SDL_Rect playerSourceRect{3, 9, 12, 16};
   const auto playerWidth{12 * pixelScale};
   const auto playerHeight{16 * pixelScale};
-  const SDL_Rect marioSourceRect{3, 9, 12, 16};
 
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
-  const auto backgroundWidth{backgroundImageSurfaceWrapper.surface->w};
-  const auto backgroundHeight{backgroundImageSurfaceWrapper.surface->h};
+  const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
+  const auto backgroundSourceHeight{backgroundImageSurfaceWrapper.surface->h};
 
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
 
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
+  const auto cameraWidth{256};
+  const auto cameraHeight{240};
   auto playing{true};
   auto playerLeftEdge{0};
   auto playerTopEdge{screenHeight - playerHeight};
@@ -233,7 +235,7 @@ static auto run(const std::string &playerImagePath,
   auto playerRunAcceleration{2};
   const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
   const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
-  SDL_Rect backgroundRect{0, 0, 256, 240};
+  SDL_Rect backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
@@ -302,16 +304,19 @@ static auto run(const std::string &playerImagePath,
       playerLeftEdge += playerHorizontalVelocity;
     const auto playerDistanceRightOfCenter{playerLeftEdge + playerWidth / 2 -
                                            screenWidth / 2};
-    const auto backgroundLeftEdge{backgroundRect.x};
-    const auto backgroundRightEdge{backgroundLeftEdge + backgroundRect.w - 1};
+    const auto backgroundLeftEdge{backgroundSourceRect.x};
+    const auto backgroundRightEdge{backgroundLeftEdge + backgroundSourceRect.w -
+                                   1};
     if (playerDistanceRightOfCenter > 0 &&
-        backgroundRightEdge < backgroundWidth - 1) {
-      backgroundRect.x += std::min(backgroundWidth - backgroundRightEdge - 1,
-                                   playerDistanceRightOfCenter);
-      playerLeftEdge -= std::min(backgroundWidth - backgroundRightEdge - 1,
-                                 playerDistanceRightOfCenter);
+        backgroundRightEdge < backgroundSourceWidth - 1) {
+      backgroundSourceRect.x +=
+          std::min(backgroundSourceWidth - backgroundRightEdge - 1,
+                   playerDistanceRightOfCenter);
+      playerLeftEdge -=
+          std::min(backgroundSourceWidth - backgroundRightEdge - 1,
+                   playerDistanceRightOfCenter);
     } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
-      backgroundRect.x +=
+      backgroundSourceRect.x +=
           std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
       playerLeftEdge -=
           std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
@@ -319,13 +324,14 @@ static auto run(const std::string &playerImagePath,
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
-                     &backgroundRect, &wholeScreen, 0, nullptr, SDL_FLIP_NONE);
+                     &backgroundSourceRect, &wholeScreen, 0, nullptr,
+                     SDL_FLIP_NONE);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(rendererWrapper.renderer, &wallRect);
     const SDL_Rect playerRect{playerLeftEdge, playerTopEdge, playerWidth,
                               playerHeight};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
-                     &marioSourceRect, &playerRect, 0, nullptr, SDL_FLIP_NONE);
+                     &playerSourceRect, &playerRect, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   return EXIT_SUCCESS;
