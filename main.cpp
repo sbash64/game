@@ -179,15 +179,26 @@ struct ImageSurface {
 
 enum class JumpState { grounded, started, released };
 
+struct Point {
+  int x;
+  int y;
+};
+
+struct Rectangle {
+  Point origin;
+  int width;
+  int height;
+};
+
 static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
 
 static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
-                              int &playerTopEdge, JumpState &playerJumpState,
-                              int playerHeight, int ground) {
+                              Rectangle &playerRectangle,
+                              JumpState &playerJumpState, int ground) {
   playerVerticalVelocity = {0, 1};
-  playerTopEdge = ground - playerHeight;
+  playerRectangle.origin.y = ground - playerRectangle.height;
   playerJumpState = JumpState::grounded;
 }
 
@@ -223,9 +234,9 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   auto playing{true};
-  auto playerLeftEdge{0};
   const auto ground{cameraHeight - 32};
-  auto playerTopEdge{ground - playerHeight};
+  Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
+                            playerHeight};
   auto playerHorizontalVelocity{0};
   RationalNumber playerVerticalVelocity{0, 1};
   auto playerJumpState{JumpState::grounded};
@@ -268,15 +279,17 @@ static auto run(const std::string &playerImagePath,
     else if (playerHorizontalVelocity < 0)
       playerHorizontalVelocity -=
           std::max(playerHorizontalVelocity, -groundFriction);
-    const auto playerBottomEdge{playerTopEdge + playerHeight - 1};
-    const auto playerRightEdge{playerLeftEdge + playerWidth - 1};
+    const auto playerBottomEdge{playerRectangle.origin.y +
+                                playerRectangle.height - 1};
+    const auto playerRightEdge{playerRectangle.origin.x +
+                               playerRectangle.width - 1};
     const auto wallLeftEdge{wallRect.x};
     const auto wallRightEdge{wallLeftEdge + wallRect.w - 1};
     const auto wallTopEdge{wallRect.y};
     const auto playerWillBeRightOfWallsLeftEdge{
         playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
     const auto playerWillBeLeftOfWallsRightEdge{
-        playerLeftEdge + playerHorizontalVelocity <= wallRightEdge};
+        playerRectangle.origin.x + playerHorizontalVelocity <= wallRightEdge};
     const auto playerWillBeBelowWallsTopEdge{
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
@@ -284,27 +297,27 @@ static auto run(const std::string &playerImagePath,
         round(playerVerticalVelocity) + playerBottomEdge >= ground};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge)
-      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
-                        playerHeight, wallTopEdge);
+      onPlayerHitGround(playerVerticalVelocity, playerRectangle,
+                        playerJumpState, wallTopEdge);
     else if (playerWillBeBelowGround)
-      onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
-                        playerHeight, ground);
+      onPlayerHitGround(playerVerticalVelocity, playerRectangle,
+                        playerJumpState, ground);
     else
-      playerTopEdge += round(playerVerticalVelocity);
+      playerRectangle.origin.y += round(playerVerticalVelocity);
     const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
-    const auto playerIsRightOfWall{playerLeftEdge > wallRightEdge};
+    const auto playerIsRightOfWall{playerRectangle.origin.x > wallRightEdge};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
-      playerLeftEdge = wallLeftEdge - playerWidth;
+      playerRectangle.origin.x = wallLeftEdge - playerRectangle.width;
     } else if (playerIsRightOfWall && playerWillBeLeftOfWallsRightEdge &&
                playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
-      playerLeftEdge = wallRightEdge + 1;
+      playerRectangle.origin.x = wallRightEdge + 1;
     } else
-      playerLeftEdge += playerHorizontalVelocity;
-    const auto playerDistanceRightOfCenter{playerLeftEdge + playerWidth / 2 -
-                                           cameraWidth / 2};
+      playerRectangle.origin.x += playerHorizontalVelocity;
+    const auto playerDistanceRightOfCenter{
+        playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2};
     const auto backgroundLeftEdge{backgroundSourceRect.x};
     const auto backgroundRightEdge{backgroundLeftEdge + backgroundSourceRect.w -
                                    1};
@@ -316,13 +329,13 @@ static auto run(const std::string &playerImagePath,
                                 playerDistanceRightOfCenter)};
       backgroundSourceRect.x += shift;
       wallRect.x -= shift;
-      playerLeftEdge -= shift;
+      playerRectangle.origin.x -= shift;
     } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
       const auto shift{
           std::max(-backgroundLeftEdge, playerDistanceRightOfCenter)};
       backgroundSourceRect.x += shift;
       wallRect.x -= shift;
-      playerLeftEdge -= shift;
+      playerRectangle.origin.x -= shift;
     }
     // SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     // SDL_RenderClear(rendererWrapper.renderer);
@@ -334,9 +347,10 @@ static auto run(const std::string &playerImagePath,
         wallRect.x * pixelScale, wallRect.y * pixelScale,
         wallRect.w * pixelScale, wallRect.h * pixelScale};
     SDL_RenderFillRect(rendererWrapper.renderer, &wallProjection);
-    const SDL_Rect playerProjection{
-        playerLeftEdge * pixelScale, playerTopEdge * pixelScale,
-        playerWidth * pixelScale, playerHeight * pixelScale};
+    const SDL_Rect playerProjection{playerRectangle.origin.x * pixelScale,
+                                    playerRectangle.origin.y * pixelScale,
+                                    playerRectangle.width * pixelScale,
+                                    playerRectangle.height * pixelScale};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
                      &playerSourceRect, &playerProjection, 0, nullptr,
                      SDL_FLIP_NONE);
