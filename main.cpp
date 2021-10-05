@@ -99,8 +99,10 @@ static_assert(round(RationalNumber{19, 12}) == 2,
 static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
 
 constexpr auto pixelScale{4};
-constexpr auto screenWidth{256 * pixelScale};
-constexpr auto screenHeight{240 * pixelScale};
+const auto cameraWidth{256};
+const auto cameraHeight{240};
+constexpr auto screenWidth{cameraWidth * pixelScale};
+constexpr auto screenHeight{cameraHeight * pixelScale};
 
 enum class Color { red, blue, green, white };
 
@@ -207,9 +209,9 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));
-  const SDL_Rect playerSourceRect{3, 9, 12, 16};
   const auto playerWidth{12};
   const auto playerHeight{16};
+  const SDL_Rect playerSourceRect{3, 9, playerWidth, playerHeight};
 
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
@@ -220,11 +222,10 @@ static auto run(const std::string &playerImagePath,
 
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
-  const auto cameraWidth{256};
-  const auto cameraHeight{240};
   auto playing{true};
   auto playerLeftEdge{0};
-  auto playerTopEdge{cameraHeight - playerHeight};
+  const auto ground{cameraHeight - 20};
+  auto playerTopEdge{ground - playerHeight};
   auto playerHorizontalVelocity{0};
   RationalNumber playerVerticalVelocity{0, 1};
   auto playerJumpState{JumpState::grounded};
@@ -233,7 +234,7 @@ static auto run(const std::string &playerImagePath,
   auto playerMaxHorizontalSpeed{6};
   RationalNumber playerJumpAcceleration{-15, 1};
   auto playerRunAcceleration{2};
-  const SDL_Rect wallRect{100, cameraHeight - 60, 50, 60};
+  SDL_Rect wallRect{100, cameraHeight - 60, 50, 60};
   const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
   SDL_Rect backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
   while (playing) {
@@ -280,14 +281,14 @@ static auto run(const std::string &playerImagePath,
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
     const auto playerWillBeBelowGround{
-        round(playerVerticalVelocity) + playerBottomEdge >= cameraHeight - 20};
+        round(playerVerticalVelocity) + playerBottomEdge >= ground};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge)
       onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
                         playerHeight, wallTopEdge);
     else if (playerWillBeBelowGround)
       onPlayerHitGround(playerVerticalVelocity, playerTopEdge, playerJumpState,
-                        playerHeight, cameraHeight - 20);
+                        playerHeight, ground);
     else
       playerTopEdge += round(playerVerticalVelocity);
     const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
@@ -309,17 +310,17 @@ static auto run(const std::string &playerImagePath,
                                    1};
     if (playerDistanceRightOfCenter > 0 &&
         backgroundRightEdge < backgroundSourceWidth - 1) {
-      backgroundSourceRect.x +=
-          std::min(backgroundSourceWidth - backgroundRightEdge - 1,
-                   playerDistanceRightOfCenter);
-      playerLeftEdge -=
-          std::min(backgroundSourceWidth - backgroundRightEdge - 1,
-                   playerDistanceRightOfCenter);
+      const auto shift{std::min(backgroundSourceWidth - backgroundRightEdge - 1,
+                                playerDistanceRightOfCenter)};
+      backgroundSourceRect.x += shift;
+      wallRect.x -= shift;
+      playerLeftEdge -= shift;
     } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
-      backgroundSourceRect.x +=
-          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
-      playerLeftEdge -=
-          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter);
+      const auto shift{
+          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter)};
+      backgroundSourceRect.x += shift;
+      wallRect.x -= shift;
+      playerLeftEdge -= shift;
     }
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
