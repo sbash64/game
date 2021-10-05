@@ -185,6 +185,8 @@ static auto run(const std::string &playerImagePath,
   const auto playerHeight{playerImageSurfaceWrapper.surface->h};
 
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
+  const auto backgroundWidth{backgroundImageSurfaceWrapper.surface->w};
+  const auto backgroundHeight{backgroundImageSurfaceWrapper.surface->h};
 
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
@@ -204,7 +206,7 @@ static auto run(const std::string &playerImagePath,
   auto playerRunAcceleration{2};
   const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
   const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
-  const SDL_Rect backgroundRect{wholeScreen};
+  SDL_Rect backgroundRect{wholeScreen};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
@@ -271,6 +273,17 @@ static auto run(const std::string &playerImagePath,
       playerLeftEdge = wallRightEdge + 1;
     } else
       playerLeftEdge += playerHorizontalVelocity;
+    const auto playerDistanceRightOfCenter{playerLeftEdge + playerWidth / 2 -
+                                           screenWidth / 2};
+    const auto backgroundLeftEdge{backgroundRect.x};
+    const auto backgroundRightEdge{backgroundLeftEdge + backgroundRect.w - 1};
+    if (playerDistanceRightOfCenter > 0 &&
+        backgroundRightEdge < backgroundWidth) {
+      backgroundRect.x += std::min(backgroundWidth - backgroundRightEdge - 1,
+                                   playerDistanceRightOfCenter);
+      playerLeftEdge -= std::min(backgroundWidth - backgroundRightEdge - 1,
+                                 playerDistanceRightOfCenter);
+    }
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
