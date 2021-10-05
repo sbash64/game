@@ -209,9 +209,9 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));
-  const auto playerWidth{12};
+  const auto playerWidth{16};
   const auto playerHeight{16};
-  const SDL_Rect playerSourceRect{3, 9, playerWidth, playerHeight};
+  const SDL_Rect playerSourceRect{1, 9, playerWidth, playerHeight};
 
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
@@ -224,15 +224,15 @@ static auto run(const std::string &playerImagePath,
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   auto playing{true};
   auto playerLeftEdge{0};
-  const auto ground{cameraHeight - 20};
+  const auto ground{cameraHeight - 32};
   auto playerTopEdge{ground - playerHeight};
   auto playerHorizontalVelocity{0};
   RationalNumber playerVerticalVelocity{0, 1};
   auto playerJumpState{JumpState::grounded};
   RationalNumber gravity{1, 2};
   auto groundFriction{1};
-  auto playerMaxHorizontalSpeed{6};
-  RationalNumber playerJumpAcceleration{-15, 1};
+  auto playerMaxHorizontalSpeed{4};
+  RationalNumber playerJumpAcceleration{-10, 1};
   auto playerRunAcceleration{2};
   SDL_Rect wallRect{100, cameraHeight - 60, 50, 60};
   const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
