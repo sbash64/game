@@ -162,7 +162,8 @@ static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
   playerJumpState = JumpState::grounded;
 }
 
-static auto run(const std::string &imagePath) -> int {
+static auto run(const std::string &playerImagePath,
+                const std::string &backgroundImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   sdl_wrappers::Window windowWrapper;
   sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
@@ -176,16 +177,20 @@ static auto run(const std::string &imagePath) -> int {
     throw std::runtime_error{stream.str()};
   }
 
-  sdl_wrappers::ImageSurface imageSurfaceWrapper{imagePath};
+  sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(
-      imageSurfaceWrapper.surface, SDL_TRUE,
-      SDL_MapRGB(imageSurfaceWrapper.surface->format, 0, 0xFF, 0xFF));
+      playerImageSurfaceWrapper.surface, SDL_TRUE,
+      SDL_MapRGB(playerImageSurfaceWrapper.surface->format, 0, 0, 0));
+  const auto playerWidth{playerImageSurfaceWrapper.surface->w};
+  const auto playerHeight{playerImageSurfaceWrapper.surface->h};
 
-  sdl_wrappers::Texture textureWrapper{rendererWrapper.renderer,
-                                       imageSurfaceWrapper.surface};
-  const auto playerWidth{imageSurfaceWrapper.surface->w};
-  const auto playerHeight{imageSurfaceWrapper.surface->h};
+  sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
 
+  sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
+                                             playerImageSurfaceWrapper.surface};
+
+  sdl_wrappers::Texture backgroundTextureWrapper{
+      rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   auto playing{true};
   auto playerLeftEdge{0};
   auto playerTopEdge{screenHeight - playerHeight};
@@ -198,6 +203,8 @@ static auto run(const std::string &imagePath) -> int {
   RationalNumber playerJumpAcceleration{-15, 1};
   auto playerRunAcceleration{2};
   const SDL_Rect wallRect{500, screenHeight - 60, 100, 60};
+  const SDL_Rect wholeScreen{0, 0, screenWidth, screenHeight};
+  const SDL_Rect backgroundRect{wholeScreen};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
@@ -266,12 +273,14 @@ static auto run(const std::string &imagePath) -> int {
       playerLeftEdge += playerHorizontalVelocity;
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     SDL_RenderClear(rendererWrapper.renderer);
+    SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
+                     &backgroundRect, &wholeScreen, 0, nullptr, SDL_FLIP_NONE);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
     SDL_RenderFillRect(rendererWrapper.renderer, &wallRect);
     const SDL_Rect playerRect{playerLeftEdge, playerTopEdge, playerWidth,
                               playerHeight};
-    SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture, nullptr,
-                     &playerRect, 0, nullptr, SDL_FLIP_NONE);
+    SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
+                     nullptr, &playerRect, 0, nullptr, SDL_FLIP_NONE);
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   return EXIT_SUCCESS;
@@ -279,10 +288,10 @@ static auto run(const std::string &imagePath) -> int {
 } // namespace sbash64::game
 
 int main(int argc, char *argv[]) {
-  if (argc < 2)
+  if (argc < 3)
     return EXIT_FAILURE;
   try {
-    return sbash64::game::run(argv[1]);
+    return sbash64::game::run(argv[1], argv[2]);
   } catch (const std::runtime_error &e) {
     std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
