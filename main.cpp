@@ -9,6 +9,7 @@
 #include <SDL_surface.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -22,28 +23,20 @@ static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
   int bpp = surface->format->BytesPerPixel;
   /* Here p is the address to the pixel we want to retrieve */
   const auto *p = static_cast<const Uint8 *>(surface->pixels) +
-                  y * surface->pitch + x * bpp;
-
+                  static_cast<std::ptrdiff_t>(y) * surface->pitch +
+                  static_cast<std::ptrdiff_t>(x) * bpp;
   switch (bpp) {
   case 1:
     return *p;
-    break;
-
   case 2:
-    return *(Uint16 *)p;
-    break;
-
+    return *reinterpret_cast<const Uint16 *>(p);
   case 3:
     if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
       return p[0] << 16 | p[1] << 8 | p[2];
     else
       return p[0] | p[1] << 8 | p[2] << 16;
-    break;
-
   case 4:
-    return *(Uint32 *)p;
-    break;
-
+    return *reinterpret_cast<const Uint32 *>(p);
   default:
     return 0; /* shouldn't happen, but avoids warnings */
   }
