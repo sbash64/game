@@ -77,8 +77,28 @@ constexpr auto operator+=(RationalNumber &a, RationalNumber b)
   }
 }
 
+constexpr auto operator+(RationalNumber a, int b) -> RationalNumber {
+  return RationalNumber{a.numerator + a.denominator * b, a.denominator};
+}
+
 constexpr auto operator+(RationalNumber a, RationalNumber b) -> RationalNumber {
   return a += b;
+}
+
+constexpr auto operator-(RationalNumber a) -> RationalNumber {
+  return {-a.numerator, a.denominator};
+}
+
+constexpr auto operator/(RationalNumber a, RationalNumber b) -> RationalNumber {
+  return {a.numerator * b.denominator, a.denominator * b.numerator};
+}
+
+constexpr auto operator/(RationalNumber a, int b) -> RationalNumber {
+  return {a.numerator, a.denominator * b};
+}
+
+constexpr auto operator<(RationalNumber a, RationalNumber b) -> bool {
+  return a.numerator * b.denominator < b.numerator * a.denominator;
 }
 
 constexpr auto round(RationalNumber a) -> int {
@@ -93,6 +113,19 @@ static_assert(RationalNumber{3, 4} + RationalNumber{5, 6} ==
 static_assert(RationalNumber{4, 7} + RationalNumber{2, 3} ==
                   RationalNumber{26, 21},
               "rational number arithmetic error");
+
+static_assert(RationalNumber{4, 7} + 3 == RationalNumber{25, 7},
+              "rational number arithmetic error");
+
+static_assert(RationalNumber{4, 7} / RationalNumber{2, 3} ==
+                  RationalNumber{12, 14},
+              "rational number arithmetic error");
+
+static_assert(RationalNumber{4, 7} / 2 == RationalNumber{4, 14},
+              "rational number arithmetic error");
+
+static_assert(RationalNumber{19, 12} < RationalNumber{7, 3},
+              "rational number comparison error");
 
 static_assert(round(RationalNumber{19, 12}) == 2,
               "rational number round error");
@@ -285,15 +318,31 @@ static auto run(const std::string &playerImagePath,
     const auto wallTopEdge{wallRect.y};
     const auto playerWillBeRightOfWallsLeftEdge{
         playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
+    const auto playerIsRightOfWallsLeftEdge{playerRightEdge >= wallLeftEdge};
     const auto playerWillBeLeftOfWallsRightEdge{
         playerRectangle.origin.x + playerHorizontalVelocity <= wallRightEdge};
+    const auto playerIsLeftOfWallsRightEdge{playerRectangle.origin.x <=
+                                            wallRightEdge};
     const auto playerWillBeBelowWallsTopEdge{
         playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
     const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
     const auto playerWillBeBelowGround{
         round(playerVerticalVelocity) + playerBottomEdge >= ground};
+    const auto previousDistanceRightOfWall{playerRightEdge - wallLeftEdge};
+    const auto previousDistanceLeftOfWall{playerRectangle.origin.x -
+                                          wallRightEdge};
+    const auto previousDistanceAboveWall{playerBottomEdge - wallTopEdge};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
-        playerWillBeRightOfWallsLeftEdge && playerWillBeLeftOfWallsRightEdge)
+        ((playerHorizontalVelocity < 0 &&
+          -playerVerticalVelocity / playerHorizontalVelocity <
+              (playerVerticalVelocity + previousDistanceAboveWall) /
+                  (previousDistanceRightOfWall + playerHorizontalVelocity)) ||
+         (playerHorizontalVelocity > 0 &&
+          playerVerticalVelocity / playerHorizontalVelocity <
+              (playerVerticalVelocity + previousDistanceAboveWall) /
+                  (previousDistanceLeftOfWall + playerHorizontalVelocity)) ||
+         (playerHorizontalVelocity == 0 && playerIsRightOfWallsLeftEdge &&
+          playerIsLeftOfWallsRightEdge)))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, wallTopEdge);
     else if (playerWillBeBelowGround)
