@@ -269,16 +269,15 @@ static auto run(const std::string &playerImagePath,
       if (playerVerticalVelocity.numerator < 0)
         playerVerticalVelocity = {0, 1};
     }
-    if (playerHorizontalVelocity > playerMaxHorizontalSpeed)
-      playerHorizontalVelocity = playerMaxHorizontalSpeed;
-    else if (playerHorizontalVelocity < -playerMaxHorizontalSpeed)
-      playerHorizontalVelocity = -playerMaxHorizontalSpeed;
+    playerHorizontalVelocity =
+        std::clamp(playerHorizontalVelocity, -playerMaxHorizontalSpeed,
+                   playerMaxHorizontalSpeed);
     if (playerHorizontalVelocity > 0)
-      playerHorizontalVelocity -=
-          std::min(playerHorizontalVelocity, groundFriction);
+      playerHorizontalVelocity =
+          std::max(0, playerHorizontalVelocity - groundFriction);
     else if (playerHorizontalVelocity < 0)
-      playerHorizontalVelocity -=
-          std::max(playerHorizontalVelocity, -groundFriction);
+      playerHorizontalVelocity =
+          std::min(0, playerHorizontalVelocity + groundFriction);
     const auto playerBottomEdge{playerRectangle.origin.y +
                                 playerRectangle.height - 1};
     const auto playerRightEdge{playerRectangle.origin.x +
