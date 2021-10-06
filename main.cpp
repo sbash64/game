@@ -334,10 +334,12 @@ static auto run(const std::string &playerImagePath,
     const auto previousDistanceAboveWall{playerBottomEdge - wallTopEdge};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         ((playerHorizontalVelocity < 0 && playerWillBeLeftOfWallsRightEdge &&
+          playerIsRightOfWallsLeftEdge &&
           -playerVerticalVelocity / playerHorizontalVelocity <
               -(playerVerticalVelocity + previousDistanceAboveWall) /
                   (previousDistanceRightOfWall + playerHorizontalVelocity)) ||
          (playerHorizontalVelocity > 0 && playerWillBeRightOfWallsLeftEdge &&
+          playerIsLeftOfWallsRightEdge &&
           playerVerticalVelocity / playerHorizontalVelocity <
               (playerVerticalVelocity + previousDistanceAboveWall) /
                   (previousDistanceLeftOfWall + playerHorizontalVelocity)) ||
