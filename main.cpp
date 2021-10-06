@@ -9,6 +9,7 @@
 #include <SDL_surface.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <iostream>
@@ -272,12 +273,9 @@ static auto run(const std::string &playerImagePath,
     playerHorizontalVelocity =
         std::clamp(playerHorizontalVelocity, -playerMaxHorizontalSpeed,
                    playerMaxHorizontalSpeed);
-    if (playerHorizontalVelocity > 0)
-      playerHorizontalVelocity =
-          std::max(0, playerHorizontalVelocity - groundFriction);
-    else if (playerHorizontalVelocity < 0)
-      playerHorizontalVelocity =
-          std::min(0, playerHorizontalVelocity + groundFriction);
+    playerHorizontalVelocity =
+        ((playerHorizontalVelocity < 0) ? -1 : 1) *
+        std::max(0, std::abs(playerHorizontalVelocity) - groundFriction);
     const auto playerBottomEdge{playerRectangle.origin.y +
                                 playerRectangle.height - 1};
     const auto playerRightEdge{playerRectangle.origin.x +
