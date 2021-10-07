@@ -242,6 +242,11 @@ struct Rectangle {
   int height;
 };
 
+constexpr auto applyHorizontalVelocity(Rectangle a, int b) -> Rectangle {
+  a.origin.x += b;
+  return a;
+}
+
 constexpr auto topEdge(Rectangle a) -> int { return a.origin.y; }
 
 constexpr auto leftEdge(Rectangle a) -> int { return a.origin.x; }
@@ -363,9 +368,10 @@ static auto run(const std::string &playerImagePath,
     playerHorizontalVelocity =
         withFriction(clamp(playerHorizontalVelocity, playerMaxHorizontalSpeed),
                      groundFriction);
-    const auto playerWillBeRightOfWallsLeftEdge{rightEdge(playerRectangle) +
-                                                    playerHorizontalVelocity >=
-                                                leftEdge(wallRectangle)};
+    const auto playerWillBeRightOfWallsLeftEdge{
+        rightEdge(applyHorizontalVelocity(playerRectangle,
+                                          playerHorizontalVelocity)) >=
+        leftEdge(wallRectangle)};
     const auto playerIsRightOfWallsLeftEdge{rightEdge(playerRectangle) >=
                                             leftEdge(wallRectangle)};
     const auto playerWillBeLeftOfWallsRightEdge{playerRectangle.origin.x +
