@@ -327,7 +327,7 @@ static auto run(const std::string &playerImagePath,
   const auto playerRunAcceleration{2};
   Rectangle wallRect{Point{100, cameraHeight - 60}, 50, 60};
   const SDL_Rect backgroundProjection{0, 0, screenWidth, screenHeight};
-  SDL_Rect backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
+  Rectangle backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
   while (playing) {
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
@@ -409,30 +409,31 @@ static auto run(const std::string &playerImagePath,
       playerRectangle.origin.x += playerHorizontalVelocity;
     const auto playerDistanceRightOfCenter{
         playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2};
-    const auto backgroundLeftEdge{backgroundSourceRect.x};
-    const auto backgroundRightEdge{backgroundLeftEdge + backgroundSourceRect.w -
-                                   1};
+    const auto backgroundLeftEdge{backgroundSourceRect.origin.x};
+    const auto backgroundRightEdge{backgroundLeftEdge +
+                                   backgroundSourceRect.width - 1};
     const auto distanceFromBackgroundRightEdgeToEnd{backgroundSourceWidth -
                                                     backgroundRightEdge - 1};
     if (playerDistanceRightOfCenter > 0 &&
         distanceFromBackgroundRightEdgeToEnd > 0) {
       const auto shift{std::min(distanceFromBackgroundRightEdgeToEnd,
                                 playerDistanceRightOfCenter)};
-      backgroundSourceRect.x += shift;
+      backgroundSourceRect.origin.x += shift;
       wallRect.origin.x -= shift;
       playerRectangle.origin.x -= shift;
     } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
       const auto shift{
           std::max(-backgroundLeftEdge, playerDistanceRightOfCenter)};
-      backgroundSourceRect.x += shift;
+      backgroundSourceRect.origin.x += shift;
       wallRect.origin.x -= shift;
       playerRectangle.origin.x -= shift;
     }
     // SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
     // SDL_RenderClear(rendererWrapper.renderer);
+    const auto backgroundSourceRectConverted{toSDLRect(backgroundSourceRect)};
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
-                     &backgroundSourceRect, &backgroundProjection, 0, nullptr,
-                     SDL_FLIP_NONE);
+                     &backgroundSourceRectConverted, &backgroundProjection, 0,
+                     nullptr, SDL_FLIP_NONE);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
     const auto wallProjection{toSDLRect(wallRect * pixelScale)};
     SDL_RenderFillRect(rendererWrapper.renderer, &wallProjection);
