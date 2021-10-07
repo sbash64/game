@@ -286,6 +286,16 @@ constexpr auto toSDLRect(Rectangle a) -> SDL_Rect {
   return converted;
 }
 
+constexpr auto distanceBottomEdgeExceedsOtherTopEdge(Rectangle a, Rectangle b)
+    -> int {
+  return bottomEdge(a) - topEdge(b);
+}
+
+constexpr auto distanceFirstExceedsSecondHorizontally(Rectangle a, Rectangle b)
+    -> int {
+  return rightEdge(a) - leftEdge(b);
+}
+
 static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
@@ -378,39 +388,41 @@ static auto run(const std::string &playerImagePath,
         rightEdge(applyHorizontalVelocity(playerRectangle,
                                           playerHorizontalVelocity)) >=
         leftEdge(wallRectangle)};
-    const auto playerIsRightOfWallsLeftEdge{rightEdge(playerRectangle) >=
-                                            leftEdge(wallRectangle)};
+    const auto playerIsRightOfWallsLeftEdge{
+        distanceFirstExceedsSecondHorizontally(playerRectangle,
+                                               wallRectangle) >= 0};
     const auto playerWillBeLeftOfWallsRightEdge{
         leftEdge(applyHorizontalVelocity(playerRectangle,
                                          playerHorizontalVelocity)) <=
         rightEdge(wallRectangle)};
-    const auto playerIsLeftOfWallsRightEdge{leftEdge(playerRectangle) <=
-                                            rightEdge(wallRectangle)};
-    const auto playerWillBeBelowWallsTopEdge{
-        bottomEdge(
-            applyVerticalVelocity(playerRectangle, playerVerticalVelocity)) >=
-        topEdge(wallRectangle)};
-    const auto playerIsAboveWall{bottomEdge(playerRectangle) <
-                                 topEdge(wallRectangle)};
+    const auto playerIsLeftOfWallsRightEdge{
+        0 <=
+        distanceFirstExceedsSecondHorizontally(wallRectangle, playerRectangle)};
     const auto playerWillBeBelowGround{
         bottomEdge(applyVerticalVelocity(playerRectangle,
                                          playerVerticalVelocity)) >= ground};
-    const auto previousDistanceRightOfWall{rightEdge(playerRectangle) -
-                                           leftEdge(wallRectangle)};
-    const auto previousDistanceLeftOfWall{leftEdge(playerRectangle) -
-                                          rightEdge(wallRectangle)};
-    const auto previousDistanceAboveWall{bottomEdge(playerRectangle) -
-                                         topEdge(wallRectangle)};
-    if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
+    const auto previousDistanceRightOfWall{
+        distanceFirstExceedsSecondHorizontally(playerRectangle, wallRectangle)};
+    const auto previousDistanceLeftOfWall{
+        -distanceFirstExceedsSecondHorizontally(wallRectangle,
+                                                playerRectangle)};
+    const auto playerWillBeBelowWallsTopEdge{
+        distanceBottomEdgeExceedsOtherTopEdge(
+            applyVerticalVelocity(playerRectangle, playerVerticalVelocity),
+            wallRectangle) >= 0};
+    const auto distancePlayerExceedsWallFromAbove{
+        distanceBottomEdgeExceedsOtherTopEdge(playerRectangle, wallRectangle)};
+    if (distancePlayerExceedsWallFromAbove < 0 &&
+        playerWillBeBelowWallsTopEdge &&
         ((playerHorizontalVelocity < 0 && playerWillBeLeftOfWallsRightEdge &&
           playerIsRightOfWallsLeftEdge &&
           playerVerticalVelocity / playerHorizontalVelocity >
-              (playerVerticalVelocity + previousDistanceAboveWall) /
+              (playerVerticalVelocity + distancePlayerExceedsWallFromAbove) /
                   (previousDistanceRightOfWall + playerHorizontalVelocity)) ||
          (playerHorizontalVelocity > 0 && playerWillBeRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge &&
           playerVerticalVelocity / playerHorizontalVelocity <
-              (playerVerticalVelocity + previousDistanceAboveWall) /
+              (playerVerticalVelocity + distancePlayerExceedsWallFromAbove) /
                   (previousDistanceLeftOfWall + playerHorizontalVelocity)) ||
          (playerHorizontalVelocity == 0 && playerIsRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge)))
@@ -420,7 +432,8 @@ static auto run(const std::string &playerImagePath,
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, ground);
     else
-      playerRectangle.origin.y += round(playerVerticalVelocity);
+      playerRectangle =
+          applyVerticalVelocity(playerRectangle, playerVerticalVelocity);
     const auto playerIsLeftOfWall{rightEdge(playerRectangle) <
                                   leftEdge(wallRectangle)};
     const auto playerIsRightOfWall{leftEdge(playerRectangle) >
