@@ -254,13 +254,7 @@ static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
   playerJumpState = JumpState::grounded;
 }
 
-static auto run(const std::string &playerImagePath,
-                const std::string &backgroundImagePath) -> int {
-  sdl_wrappers::Init scopedInitialization;
-  sdl_wrappers::Window windowWrapper;
-  sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
-
+static void initializeSDLImage() {
   constexpr auto imageFlags{IMG_INIT_PNG};
   if (!(IMG_Init(imageFlags) & imageFlags)) {
     std::stringstream stream;
@@ -268,21 +262,34 @@ static auto run(const std::string &playerImagePath,
            << IMG_GetError();
     throw std::runtime_error{stream.str()};
   }
+}
 
+static auto clamp(int a, int limit) -> int {
+  return std::clamp(a, -limit, limit);
+}
+
+static auto withFriction(int a, int friction) -> int {
+  return ((a < 0) ? -1 : 1) * std::max(0, std::abs(a) - friction);
+}
+
+static auto run(const std::string &playerImagePath,
+                const std::string &backgroundImagePath) -> int {
+  sdl_wrappers::Init scopedInitialization;
+  sdl_wrappers::Window windowWrapper;
+  sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
+  initializeSDLImage();
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));
   const auto playerWidth{16};
   const auto playerHeight{16};
   const SDL_Rect playerSourceRect{1, 9, playerWidth, playerHeight};
-
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
   const auto backgroundSourceHeight{backgroundImageSurfaceWrapper.surface->h};
-
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
-
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   auto playing{true};
@@ -292,11 +299,11 @@ static auto run(const std::string &playerImagePath,
   auto playerHorizontalVelocity{0};
   RationalNumber playerVerticalVelocity{0, 1};
   auto playerJumpState{JumpState::grounded};
-  RationalNumber gravity{1, 2};
-  auto groundFriction{1};
-  auto playerMaxHorizontalSpeed{4};
-  RationalNumber playerJumpAcceleration{-10, 1};
-  auto playerRunAcceleration{2};
+  const RationalNumber gravity{1, 2};
+  const auto groundFriction{1};
+  const auto playerMaxHorizontalSpeed{4};
+  const RationalNumber playerJumpAcceleration{-10, 1};
+  const auto playerRunAcceleration{2};
   SDL_Rect wallRect{100, cameraHeight - 60, 50, 60};
   const SDL_Rect backgroundProjection{0, 0, screenWidth, screenHeight};
   SDL_Rect backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
@@ -322,11 +329,8 @@ static auto run(const std::string &playerImagePath,
         playerVerticalVelocity = {0, 1};
     }
     playerHorizontalVelocity =
-        std::clamp(playerHorizontalVelocity, -playerMaxHorizontalSpeed,
-                   playerMaxHorizontalSpeed);
-    playerHorizontalVelocity =
-        ((playerHorizontalVelocity < 0) ? -1 : 1) *
-        std::max(0, std::abs(playerHorizontalVelocity) - groundFriction);
+        withFriction(clamp(playerHorizontalVelocity, playerMaxHorizontalSpeed),
+                     groundFriction);
     const auto playerBottomEdge{playerRectangle.origin.y +
                                 playerRectangle.height - 1};
     const auto playerRightEdge{playerRectangle.origin.x +
