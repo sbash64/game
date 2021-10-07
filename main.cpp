@@ -101,6 +101,18 @@ constexpr auto operator<(RationalNumber a, RationalNumber b) -> bool {
   return a.numerator * b.denominator < b.numerator * a.denominator;
 }
 
+constexpr auto operator>(RationalNumber a, RationalNumber b) -> bool {
+  return b < a;
+}
+
+constexpr auto operator<=(RationalNumber a, RationalNumber b) -> bool {
+  return !(a > b);
+}
+
+constexpr auto operator>=(RationalNumber a, RationalNumber b) -> bool {
+  return !(a < b);
+}
+
 constexpr auto round(RationalNumber a) -> int {
   return a.numerator / a.denominator +
          (a.numerator % a.denominator >= (a.denominator + 1) / 2 ? 1 : 0);
@@ -125,6 +137,12 @@ static_assert(RationalNumber{4, 7} / 2 == RationalNumber{4, 14},
               "rational number arithmetic error");
 
 static_assert(RationalNumber{19, 12} < RationalNumber{7, 3},
+              "rational number comparison error");
+
+static_assert(RationalNumber{2, 3} > RationalNumber{1, 4},
+              "rational number comparison error");
+
+static_assert(RationalNumber{2, 3} >= RationalNumber{2, 3},
               "rational number comparison error");
 
 static_assert(round(RationalNumber{19, 12}) == 2,
@@ -335,8 +353,8 @@ static auto run(const std::string &playerImagePath,
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         ((playerHorizontalVelocity < 0 && playerWillBeLeftOfWallsRightEdge &&
           playerIsRightOfWallsLeftEdge &&
-          -playerVerticalVelocity / playerHorizontalVelocity <
-              -(playerVerticalVelocity + previousDistanceAboveWall) /
+          playerVerticalVelocity / playerHorizontalVelocity >
+              (playerVerticalVelocity + previousDistanceAboveWall) /
                   (previousDistanceRightOfWall + playerHorizontalVelocity)) ||
          (playerHorizontalVelocity > 0 && playerWillBeRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge &&
