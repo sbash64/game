@@ -242,6 +242,18 @@ struct Rectangle {
   int height;
 };
 
+constexpr auto topEdge(Rectangle a) -> int { return a.origin.y; }
+
+constexpr auto leftEdge(Rectangle a) -> int { return a.origin.x; }
+
+constexpr auto rightEdge(Rectangle a) -> int {
+  return a.origin.x + a.width - 1;
+}
+
+constexpr auto bottomEdge(Rectangle a) -> int {
+  return a.origin.y + a.height - 1;
+}
+
 constexpr auto operator*=(Rectangle &a, int scale) -> Rectangle & {
   a.origin.x *= scale;
   a.origin.y *= scale;
@@ -351,29 +363,29 @@ static auto run(const std::string &playerImagePath,
     playerHorizontalVelocity =
         withFriction(clamp(playerHorizontalVelocity, playerMaxHorizontalSpeed),
                      groundFriction);
-    const auto playerBottomEdge{playerRectangle.origin.y +
-                                playerRectangle.height - 1};
-    const auto playerRightEdge{playerRectangle.origin.x +
-                               playerRectangle.width - 1};
-    const auto wallLeftEdge{wallRectangle.origin.x};
-    const auto wallRightEdge{wallLeftEdge + wallRectangle.width - 1};
-    const auto wallTopEdge{wallRectangle.origin.y};
-    const auto playerWillBeRightOfWallsLeftEdge{
-        playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
-    const auto playerIsRightOfWallsLeftEdge{playerRightEdge >= wallLeftEdge};
-    const auto playerWillBeLeftOfWallsRightEdge{
-        playerRectangle.origin.x + playerHorizontalVelocity <= wallRightEdge};
+    const auto playerWillBeRightOfWallsLeftEdge{rightEdge(playerRectangle) +
+                                                    playerHorizontalVelocity >=
+                                                leftEdge(wallRectangle)};
+    const auto playerIsRightOfWallsLeftEdge{rightEdge(playerRectangle) >=
+                                            leftEdge(wallRectangle)};
+    const auto playerWillBeLeftOfWallsRightEdge{playerRectangle.origin.x +
+                                                    playerHorizontalVelocity <=
+                                                rightEdge(wallRectangle)};
     const auto playerIsLeftOfWallsRightEdge{playerRectangle.origin.x <=
-                                            wallRightEdge};
+                                            rightEdge(wallRectangle)};
     const auto playerWillBeBelowWallsTopEdge{
-        playerBottomEdge + round(playerVerticalVelocity) >= wallTopEdge};
-    const auto playerIsAboveWall{playerBottomEdge < wallTopEdge};
+        bottomEdge(playerRectangle) + round(playerVerticalVelocity) >=
+        topEdge(wallRectangle)};
+    const auto playerIsAboveWall{bottomEdge(playerRectangle) <
+                                 topEdge(wallRectangle)};
     const auto playerWillBeBelowGround{
-        round(playerVerticalVelocity) + playerBottomEdge >= ground};
-    const auto previousDistanceRightOfWall{playerRightEdge - wallLeftEdge};
+        round(playerVerticalVelocity) + bottomEdge(playerRectangle) >= ground};
+    const auto previousDistanceRightOfWall{rightEdge(playerRectangle) -
+                                           leftEdge(wallRectangle)};
     const auto previousDistanceLeftOfWall{playerRectangle.origin.x -
-                                          wallRightEdge};
-    const auto previousDistanceAboveWall{playerBottomEdge - wallTopEdge};
+                                          rightEdge(wallRectangle)};
+    const auto previousDistanceAboveWall{bottomEdge(playerRectangle) -
+                                         topEdge(wallRectangle)};
     if (playerIsAboveWall && playerWillBeBelowWallsTopEdge &&
         ((playerHorizontalVelocity < 0 && playerWillBeLeftOfWallsRightEdge &&
           playerIsRightOfWallsLeftEdge &&
@@ -388,22 +400,25 @@ static auto run(const std::string &playerImagePath,
          (playerHorizontalVelocity == 0 && playerIsRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge)))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
-                        playerJumpState, wallTopEdge);
+                        playerJumpState, topEdge(wallRectangle));
     else if (playerWillBeBelowGround)
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, ground);
     else
       playerRectangle.origin.y += round(playerVerticalVelocity);
-    const auto playerIsLeftOfWall{playerRightEdge < wallLeftEdge};
-    const auto playerIsRightOfWall{playerRectangle.origin.x > wallRightEdge};
+    const auto playerIsLeftOfWall{rightEdge(playerRectangle) <
+                                  leftEdge(wallRectangle)};
+    const auto playerIsRightOfWall{playerRectangle.origin.x >
+                                   rightEdge(wallRectangle)};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
-      playerRectangle.origin.x = wallLeftEdge - playerRectangle.width;
+      playerRectangle.origin.x =
+          leftEdge(wallRectangle) - playerRectangle.width;
     } else if (playerIsRightOfWall && playerWillBeLeftOfWallsRightEdge &&
                playerWillBeBelowWallsTopEdge) {
       playerHorizontalVelocity = 0;
-      playerRectangle.origin.x = wallRightEdge + 1;
+      playerRectangle.origin.x = rightEdge(wallRectangle) + 1;
     } else
       playerRectangle.origin.x += playerHorizontalVelocity;
     const auto playerDistanceRightOfCenter{
