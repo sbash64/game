@@ -242,6 +242,27 @@ struct Rectangle {
   int height;
 };
 
+constexpr auto operator*=(Rectangle &a, int scale) -> Rectangle & {
+  a.origin.x *= scale;
+  a.origin.y *= scale;
+  a.width *= scale;
+  a.height *= scale;
+  return a;
+}
+
+constexpr auto operator*(Rectangle a, int scale) -> Rectangle {
+  return a *= scale;
+}
+
+constexpr auto toSDLRect(Rectangle a) -> SDL_Rect {
+  SDL_Rect converted;
+  converted.x = a.origin.x;
+  converted.y = a.origin.y;
+  converted.w = a.width;
+  converted.h = a.height;
+  return converted;
+}
+
 static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
@@ -264,12 +285,12 @@ static void initializeSDLImage() {
   }
 }
 
-static auto clamp(int a, int limit) -> int {
-  return std::clamp(a, -limit, limit);
+static auto clamp(int velocity, int limit) -> int {
+  return std::clamp(velocity, -limit, limit);
 }
 
-static auto withFriction(int a, int friction) -> int {
-  return ((a < 0) ? -1 : 1) * std::max(0, std::abs(a) - friction);
+static auto withFriction(int velocity, int friction) -> int {
+  return ((velocity < 0) ? -1 : 1) * std::max(0, std::abs(velocity) - friction);
 }
 
 static auto run(const std::string &playerImagePath,
@@ -304,7 +325,7 @@ static auto run(const std::string &playerImagePath,
   const auto playerMaxHorizontalSpeed{4};
   const RationalNumber playerJumpAcceleration{-10, 1};
   const auto playerRunAcceleration{2};
-  SDL_Rect wallRect{100, cameraHeight - 60, 50, 60};
+  Rectangle wallRect{Point{100, cameraHeight - 60}, 50, 60};
   const SDL_Rect backgroundProjection{0, 0, screenWidth, screenHeight};
   SDL_Rect backgroundSourceRect{0, 0, cameraWidth, cameraHeight};
   while (playing) {
@@ -335,9 +356,9 @@ static auto run(const std::string &playerImagePath,
                                 playerRectangle.height - 1};
     const auto playerRightEdge{playerRectangle.origin.x +
                                playerRectangle.width - 1};
-    const auto wallLeftEdge{wallRect.x};
-    const auto wallRightEdge{wallLeftEdge + wallRect.w - 1};
-    const auto wallTopEdge{wallRect.y};
+    const auto wallLeftEdge{wallRect.origin.x};
+    const auto wallRightEdge{wallLeftEdge + wallRect.width - 1};
+    const auto wallTopEdge{wallRect.origin.y};
     const auto playerWillBeRightOfWallsLeftEdge{
         playerRightEdge + playerHorizontalVelocity >= wallLeftEdge};
     const auto playerIsRightOfWallsLeftEdge{playerRightEdge >= wallLeftEdge};
@@ -398,13 +419,13 @@ static auto run(const std::string &playerImagePath,
       const auto shift{std::min(distanceFromBackgroundRightEdgeToEnd,
                                 playerDistanceRightOfCenter)};
       backgroundSourceRect.x += shift;
-      wallRect.x -= shift;
+      wallRect.origin.x -= shift;
       playerRectangle.origin.x -= shift;
     } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
       const auto shift{
           std::max(-backgroundLeftEdge, playerDistanceRightOfCenter)};
       backgroundSourceRect.x += shift;
-      wallRect.x -= shift;
+      wallRect.origin.x -= shift;
       playerRectangle.origin.x -= shift;
     }
     // SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
@@ -413,14 +434,9 @@ static auto run(const std::string &playerImagePath,
                      &backgroundSourceRect, &backgroundProjection, 0, nullptr,
                      SDL_FLIP_NONE);
     SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
-    const SDL_Rect wallProjection{
-        wallRect.x * pixelScale, wallRect.y * pixelScale,
-        wallRect.w * pixelScale, wallRect.h * pixelScale};
+    const auto wallProjection{toSDLRect(wallRect * pixelScale)};
     SDL_RenderFillRect(rendererWrapper.renderer, &wallProjection);
-    const SDL_Rect playerProjection{playerRectangle.origin.x * pixelScale,
-                                    playerRectangle.origin.y * pixelScale,
-                                    playerRectangle.width * pixelScale,
-                                    playerRectangle.height * pixelScale};
+    const auto playerProjection{toSDLRect(playerRectangle * pixelScale)};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
                      &playerSourceRect, &playerProjection, 0, nullptr,
                      SDL_FLIP_NONE);
