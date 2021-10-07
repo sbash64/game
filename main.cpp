@@ -423,7 +423,7 @@ static auto run(const std::string &playerImagePath,
       playerRectangle.origin.y += round(playerVerticalVelocity);
     const auto playerIsLeftOfWall{rightEdge(playerRectangle) <
                                   leftEdge(wallRectangle)};
-    const auto playerIsRightOfWall{playerRectangle.origin.x >
+    const auto playerIsRightOfWall{leftEdge(playerRectangle) >
                                    rightEdge(wallRectangle)};
     if (playerIsLeftOfWall && playerWillBeRightOfWallsLeftEdge &&
         playerWillBeBelowWallsTopEdge) {
@@ -438,11 +438,8 @@ static auto run(const std::string &playerImagePath,
       playerRectangle.origin.x += playerHorizontalVelocity;
     const auto playerDistanceRightOfCenter{
         playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2};
-    const auto backgroundLeftEdge{backgroundSourceRect.origin.x};
-    const auto backgroundRightEdge{backgroundLeftEdge +
-                                   backgroundSourceRect.width - 1};
-    const auto distanceFromBackgroundRightEdgeToEnd{backgroundSourceWidth -
-                                                    backgroundRightEdge - 1};
+    const auto distanceFromBackgroundRightEdgeToEnd{
+        backgroundSourceWidth - rightEdge(backgroundSourceRect) - 1};
     if (playerDistanceRightOfCenter > 0 &&
         distanceFromBackgroundRightEdgeToEnd > 0) {
       const auto shift{std::min(distanceFromBackgroundRightEdgeToEnd,
@@ -450,9 +447,10 @@ static auto run(const std::string &playerImagePath,
       backgroundSourceRect.origin.x += shift;
       wallRectangle.origin.x -= shift;
       playerRectangle.origin.x -= shift;
-    } else if (playerDistanceRightOfCenter < 0 && backgroundLeftEdge > 0) {
-      const auto shift{
-          std::max(-backgroundLeftEdge, playerDistanceRightOfCenter)};
+    } else if (playerDistanceRightOfCenter < 0 &&
+               leftEdge(backgroundSourceRect) > 0) {
+      const auto shift{std::max(-leftEdge(backgroundSourceRect),
+                                playerDistanceRightOfCenter)};
       backgroundSourceRect.origin.x += shift;
       wallRectangle.origin.x -= shift;
       playerRectangle.origin.x -= shift;
