@@ -247,6 +247,12 @@ constexpr auto applyHorizontalVelocity(Rectangle a, int b) -> Rectangle {
   return a;
 }
 
+constexpr auto applyVerticalVelocity(Rectangle a, RationalNumber b)
+    -> Rectangle {
+  a.origin.y += round(b);
+  return a;
+}
+
 constexpr auto topEdge(Rectangle a) -> int { return a.origin.y; }
 
 constexpr auto leftEdge(Rectangle a) -> int { return a.origin.x; }
@@ -374,21 +380,24 @@ static auto run(const std::string &playerImagePath,
         leftEdge(wallRectangle)};
     const auto playerIsRightOfWallsLeftEdge{rightEdge(playerRectangle) >=
                                             leftEdge(wallRectangle)};
-    const auto playerWillBeLeftOfWallsRightEdge{playerRectangle.origin.x +
-                                                    playerHorizontalVelocity <=
-                                                rightEdge(wallRectangle)};
-    const auto playerIsLeftOfWallsRightEdge{playerRectangle.origin.x <=
+    const auto playerWillBeLeftOfWallsRightEdge{
+        leftEdge(applyHorizontalVelocity(playerRectangle,
+                                         playerHorizontalVelocity)) <=
+        rightEdge(wallRectangle)};
+    const auto playerIsLeftOfWallsRightEdge{leftEdge(playerRectangle) <=
                                             rightEdge(wallRectangle)};
     const auto playerWillBeBelowWallsTopEdge{
-        bottomEdge(playerRectangle) + round(playerVerticalVelocity) >=
+        bottomEdge(
+            applyVerticalVelocity(playerRectangle, playerVerticalVelocity)) >=
         topEdge(wallRectangle)};
     const auto playerIsAboveWall{bottomEdge(playerRectangle) <
                                  topEdge(wallRectangle)};
     const auto playerWillBeBelowGround{
-        round(playerVerticalVelocity) + bottomEdge(playerRectangle) >= ground};
+        bottomEdge(applyVerticalVelocity(playerRectangle,
+                                         playerVerticalVelocity)) >= ground};
     const auto previousDistanceRightOfWall{rightEdge(playerRectangle) -
                                            leftEdge(wallRectangle)};
-    const auto previousDistanceLeftOfWall{playerRectangle.origin.x -
+    const auto previousDistanceLeftOfWall{leftEdge(playerRectangle) -
                                           rightEdge(wallRectangle)};
     const auto previousDistanceAboveWall{bottomEdge(playerRectangle) -
                                          topEdge(wallRectangle)};
