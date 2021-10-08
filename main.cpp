@@ -306,6 +306,47 @@ public:
   }
 };
 
+class CollisionFromAbove : public Collision {
+public:
+  [[nodiscard]] auto
+  distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
+      -> int override {
+    return distanceFirstExceedsSecondHorizontally(a, b);
+  }
+
+  [[nodiscard]] auto
+  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+      -> int override {
+    return distanceFirstExceedsSecondVertically(b, a);
+  }
+
+  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
+      -> Rectangle override {
+    return applyVerticalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
+                                                    Velocity b) const
+      -> Rectangle override {
+    return applyHorizontalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto combinedVelocity(Velocity a) const
+      -> RationalNumber override {
+    return RationalNumber{-round(a.vertical), a.horizontal};
+  }
+
+  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
+      -> bool override {
+    return a.horizontal > 0;
+  }
+
+  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
+      -> bool override {
+    return a.horizontal < 0;
+  }
+};
+
 class CollisionFromRight : public Collision {
 public:
   [[nodiscard]] auto
@@ -343,7 +384,7 @@ public:
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.denominator < 0;
+    return a.vertical.numerator < 0;
   }
 };
 
@@ -384,7 +425,7 @@ public:
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.denominator < 0;
+    return a.vertical.numerator < 0;
   }
 };
 
@@ -608,20 +649,35 @@ static auto run(const std::string &playerImagePath,
                      groundFriction);
     const auto playerIsAboveTopOfWall = distanceFirstExceedsSecondVertically(
                                             playerRectangle, wallRectangle) < 0;
+    const auto playerIsBelowBottomOfWall =
+        distanceFirstExceedsSecondVertically(wallRectangle, playerRectangle) <
+        0;
     const auto playerWillBeBelowTopOfWall =
         isNonnegative(distanceFirstExceedsSecondVertically(
             applyVerticalVelocity(playerRectangle, {playerVerticalVelocity,
                                                     playerHorizontalVelocity}),
             wallRectangle));
+    const auto playerWillBeAboveBottomOfWall =
+        isNonnegative(distanceFirstExceedsSecondVertically(
+            wallRectangle, applyVerticalVelocity(playerRectangle,
+                                                 {playerVerticalVelocity,
+                                                  playerHorizontalVelocity})));
     if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
         playerPassesThrough(playerRectangle, wallRectangle,
                             {playerVerticalVelocity, playerHorizontalVelocity},
                             CollisionFromBelow{}))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, topEdge(wallRectangle));
-    else if (bottomEdge(applyVerticalVelocity(
-                 playerRectangle,
-                 {playerVerticalVelocity, playerHorizontalVelocity})) >= ground)
+    else if (playerIsBelowBottomOfWall && playerWillBeAboveBottomOfWall &&
+             playerPassesThrough(
+                 playerRectangle, wallRectangle,
+                 {playerVerticalVelocity, playerHorizontalVelocity},
+                 CollisionFromAbove{})) {
+      playerVerticalVelocity = {0, 1};
+      playerRectangle.origin.y = bottomEdge(wallRectangle) + 1;
+    } else if (bottomEdge(applyVerticalVelocity(
+                   playerRectangle, {playerVerticalVelocity,
+                                     playerHorizontalVelocity})) >= ground)
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, ground);
 
