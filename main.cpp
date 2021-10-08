@@ -580,7 +580,7 @@ static auto run(const std::string &playerImagePath,
   const auto playerMaxHorizontalSpeed{4};
   const RationalNumber playerJumpAcceleration{-10, 1};
   const auto playerRunAcceleration{2};
-  Rectangle wallRectangle{Point{100, cameraHeight - 60}, 50, 60};
+  Rectangle wallRectangle{Point{100, 160}, 50, 30};
   Rectangle backgroundSourceRect{Point{0, 0}, cameraWidth, cameraHeight};
   while (playing) {
     SDL_Event event;
