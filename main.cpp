@@ -414,9 +414,10 @@ static auto run(const std::string &playerImagePath,
           playerIsRightOfWallsLeftEdge &&
           RationalNumber{round(playerVerticalVelocity),
                          playerHorizontalVelocity} >
-              RationalNumber{round(playerVerticalVelocity) +
-                                 distanceFirstExceedsSecondVertically(
-                                     playerRectangle, wallRectangle),
+              RationalNumber{distanceFirstExceedsSecondVertically(
+                                 applyVerticalVelocity(playerRectangle,
+                                                       playerVerticalVelocity),
+                                 wallRectangle),
                              distanceFirstExceedsSecondHorizontally(
                                  playerRectangle, wallRectangle) +
                                  playerHorizontalVelocity}) ||
@@ -424,9 +425,10 @@ static auto run(const std::string &playerImagePath,
           playerIsLeftOfWallsRightEdge &&
           RationalNumber{round(playerVerticalVelocity),
                          playerHorizontalVelocity} <
-              RationalNumber{round(playerVerticalVelocity) +
-                                 distanceFirstExceedsSecondVertically(
-                                     playerRectangle, wallRectangle),
+              RationalNumber{distanceFirstExceedsSecondVertically(
+                                 applyVerticalVelocity(playerRectangle,
+                                                       playerVerticalVelocity),
+                                 wallRectangle),
                              playerHorizontalVelocity -
                                  distanceFirstExceedsSecondHorizontally(
                                      wallRectangle, playerRectangle)}) ||
