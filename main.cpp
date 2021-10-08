@@ -150,85 +150,6 @@ static_assert(round(RationalNumber{19, 12}) == 2,
 
 static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
 
-constexpr auto pixelScale{4};
-const auto cameraWidth{256};
-const auto cameraHeight{240};
-constexpr auto screenWidth{cameraWidth * pixelScale};
-constexpr auto screenHeight{cameraHeight * pixelScale};
-
-enum class Color { red, blue, green, white };
-
-static void throwRuntimeError(std::string_view message) {
-  std::stringstream stream;
-  stream << message << " SDL_Error: " << SDL_GetError();
-  throw std::runtime_error{stream.str()};
-}
-
-namespace sdl_wrappers {
-struct Init {
-  Init() {
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
-      throwRuntimeError("SDL could not initialize!");
-  }
-
-  ~Init() { SDL_Quit(); }
-};
-
-struct Window {
-  Window()
-      : window{SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
-                                SDL_WINDOWPOS_UNDEFINED, screenWidth,
-                                screenHeight, SDL_WINDOW_SHOWN)} {
-    if (window == nullptr)
-      throwRuntimeError("Window could not be created!");
-  }
-
-  ~Window() { SDL_DestroyWindow(window); }
-
-  SDL_Window *window;
-};
-
-struct Renderer {
-  explicit Renderer(SDL_Window *window)
-      : renderer{SDL_CreateRenderer(
-            window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)} {
-    if (renderer == nullptr)
-      throwRuntimeError("Renderer could not be created!");
-  }
-
-  ~Renderer() { SDL_DestroyRenderer(renderer); }
-
-  SDL_Renderer *renderer;
-};
-
-struct Texture {
-  Texture(SDL_Renderer *renderer, SDL_Surface *surface)
-      : texture{SDL_CreateTextureFromSurface(renderer, surface)} {
-    if (texture == nullptr)
-      throwRuntimeError("Unable to create texture!");
-  }
-
-  ~Texture() { SDL_DestroyTexture(texture); }
-
-  SDL_Texture *texture;
-};
-
-struct ImageSurface {
-  explicit ImageSurface(const std::string &imagePath)
-      : surface{IMG_Load(imagePath.c_str())} {
-    if (surface == nullptr) {
-      std::stringstream stream;
-      stream << "Unable to load image " << imagePath << "!";
-      throwRuntimeError(stream.str());
-    }
-  }
-
-  ~ImageSurface() { SDL_FreeSurface(surface); }
-
-  SDL_Surface *surface;
-};
-} // namespace sdl_wrappers
-
 enum class JumpState { grounded, started, released };
 
 struct Point {
@@ -241,6 +162,15 @@ struct Rectangle {
   int width;
   int height;
 };
+
+struct Velocity {
+  RationalNumber vertical;
+  int horizontal;
+};
+
+constexpr auto operator-(Velocity a) -> Velocity {
+  return {-a.vertical, -a.horizontal};
+}
 
 constexpr auto applyHorizontalVelocity(Rectangle a, int b) -> Rectangle {
   a.origin.x += b;
@@ -277,15 +207,6 @@ constexpr auto operator*(Rectangle a, int scale) -> Rectangle {
   return a *= scale;
 }
 
-constexpr auto toSDLRect(Rectangle a) -> SDL_Rect {
-  SDL_Rect converted;
-  converted.x = a.origin.x;
-  converted.y = a.origin.y;
-  converted.w = a.width;
-  converted.h = a.height;
-  return converted;
-}
-
 constexpr auto distanceFirstExceedsSecondVertically(Rectangle a, Rectangle b)
     -> int {
   return bottomEdge(a) - topEdge(b);
@@ -296,30 +217,6 @@ constexpr auto distanceFirstExceedsSecondHorizontally(Rectangle a, Rectangle b)
   return rightEdge(a) - leftEdge(b);
 }
 
-constexpr auto isNonnegative(int a) -> bool { return a >= 0; }
-
-static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
-  return keyStates[code] != 0U;
-}
-
-static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
-                              Rectangle &playerRectangle,
-                              JumpState &playerJumpState, int ground) {
-  playerVerticalVelocity = {0, 1};
-  playerRectangle.origin.y = ground - playerRectangle.height;
-  playerJumpState = JumpState::grounded;
-}
-
-static void initializeSDLImage() {
-  constexpr auto imageFlags{IMG_INIT_PNG};
-  if (!(IMG_Init(imageFlags) & imageFlags)) {
-    std::stringstream stream;
-    stream << "SDL_image could not initialize! SDL_image Error: "
-           << IMG_GetError();
-    throw std::runtime_error{stream.str()};
-  }
-}
-
 constexpr auto clamp(int velocity, int limit) -> int {
   return std::clamp(velocity, -limit, limit);
 }
@@ -327,6 +224,8 @@ constexpr auto clamp(int velocity, int limit) -> int {
 constexpr auto withFriction(int velocity, int friction) -> int {
   return ((velocity < 0) ? -1 : 1) * std::max(0, std::abs(velocity) - friction);
 }
+
+constexpr auto isNonnegative(int a) -> bool { return a >= 0; }
 
 static auto playerPassesThroughFromAbove(Rectangle playerRectangle,
                                          Rectangle wallRectangle,
@@ -415,6 +314,116 @@ static auto playerPassesThroughFromLeft(Rectangle playerRectangle,
   return playerPassesThroughWallTowardLowerBoundary ||
          playerPassesThroughWallTowardUpperBoundary ||
          playerPassesThroughWallDirectly;
+}
+
+constexpr auto pixelScale{4};
+const auto cameraWidth{256};
+const auto cameraHeight{240};
+constexpr auto screenWidth{cameraWidth * pixelScale};
+constexpr auto screenHeight{cameraHeight * pixelScale};
+
+static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
+                              Rectangle &playerRectangle,
+                              JumpState &playerJumpState, int ground) {
+  playerVerticalVelocity = {0, 1};
+  playerRectangle.origin.y = ground - playerRectangle.height;
+  playerJumpState = JumpState::grounded;
+}
+
+[[noreturn]] static void throwRuntimeError(std::string_view message) {
+  std::stringstream stream;
+  stream << message << " SDL_Error: " << SDL_GetError();
+  throw std::runtime_error{stream.str()};
+}
+
+namespace sdl_wrappers {
+namespace {
+struct Init {
+  Init() {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
+      throwRuntimeError("SDL could not initialize!");
+  }
+
+  ~Init() { SDL_Quit(); }
+};
+
+struct Window {
+  Window()
+      : window{SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
+                                SDL_WINDOWPOS_UNDEFINED, screenWidth,
+                                screenHeight, SDL_WINDOW_SHOWN)} {
+    if (window == nullptr)
+      throwRuntimeError("Window could not be created!");
+  }
+
+  ~Window() { SDL_DestroyWindow(window); }
+
+  SDL_Window *window;
+};
+
+struct Renderer {
+  explicit Renderer(SDL_Window *window)
+      : renderer{SDL_CreateRenderer(
+            window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC)} {
+    if (renderer == nullptr)
+      throwRuntimeError("Renderer could not be created!");
+  }
+
+  ~Renderer() { SDL_DestroyRenderer(renderer); }
+
+  SDL_Renderer *renderer;
+};
+
+struct Texture {
+  Texture(SDL_Renderer *renderer, SDL_Surface *surface)
+      : texture{SDL_CreateTextureFromSurface(renderer, surface)} {
+    if (texture == nullptr)
+      throwRuntimeError("Unable to create texture!");
+  }
+
+  ~Texture() { SDL_DestroyTexture(texture); }
+
+  SDL_Texture *texture;
+};
+
+struct ImageSurface {
+  explicit ImageSurface(const std::string &imagePath)
+      : surface{IMG_Load(imagePath.c_str())} {
+    if (surface == nullptr) {
+      std::stringstream stream;
+      stream << "Unable to load image " << imagePath << "!";
+      throwRuntimeError(stream.str());
+    }
+  }
+
+  ~ImageSurface() { SDL_FreeSurface(surface); }
+
+  SDL_Surface *surface;
+};
+} // namespace
+} // namespace sdl_wrappers
+
+constexpr auto toSDLRect(Rectangle a) -> SDL_Rect {
+  SDL_Rect converted;
+  converted.x = a.origin.x;
+  converted.y = a.origin.y;
+  converted.w = a.width;
+  converted.h = a.height;
+  return converted;
+}
+
+static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
+  return keyStates[code] != 0U;
+}
+
+static void initializeSDLImage() {
+  constexpr auto imageFlags{IMG_INIT_PNG};
+  if (!(IMG_Init(imageFlags) & imageFlags)) {
+    std::stringstream stream;
+    stream << "SDL_image could not initialize! SDL_image Error: "
+           << IMG_GetError();
+    throw std::runtime_error{stream.str()};
+  }
 }
 
 static auto run(const std::string &playerImagePath,
