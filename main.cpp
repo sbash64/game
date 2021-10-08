@@ -306,7 +306,7 @@ public:
   }
 };
 
-class CollisionFromLeft : public Collision {
+class CollisionFromRight : public Collision {
 public:
   [[nodiscard]] auto
   distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
@@ -334,6 +334,47 @@ public:
   [[nodiscard]] auto combinedVelocity(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{a.horizontal, round(a.vertical)};
+  }
+
+  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
+      -> bool override {
+    return a.vertical.numerator > 0;
+  }
+
+  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
+      -> bool override {
+    return a.vertical.denominator < 0;
+  }
+};
+
+class CollisionFromLeft : public Collision {
+public:
+  [[nodiscard]] auto
+  distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
+      -> int override {
+    return distanceFirstExceedsSecondVertically(a, b);
+  }
+
+  [[nodiscard]] auto
+  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+      -> int override {
+    return distanceFirstExceedsSecondHorizontally(b, a);
+  }
+
+  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
+      -> Rectangle override {
+    return applyHorizontalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
+                                                    Velocity b) const
+      -> Rectangle override {
+    return applyVerticalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto combinedVelocity(Velocity a) const
+      -> RationalNumber override {
+    return RationalNumber{-a.horizontal, round(a.vertical)};
   }
 
   [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
@@ -395,20 +436,6 @@ static auto playerPassesThrough(Rectangle playerRectangle,
   return playerPassesThroughWallTowardLowerBoundary ||
          playerPassesThroughWallTowardUpperBoundary ||
          playerPassesThroughWallDirectly;
-}
-
-static auto playerPassesThroughFromAbove(Rectangle playerRectangle,
-                                         Rectangle wallRectangle,
-                                         Velocity playerVelocity) -> bool {
-  return playerPassesThrough(playerRectangle, wallRectangle, playerVelocity,
-                             CollisionFromBelow{});
-}
-
-static auto playerPassesThroughFromLeft(Rectangle playerRectangle,
-                                        Rectangle wallRectangle,
-                                        Velocity playerVelocity) -> bool {
-  return playerPassesThrough(playerRectangle, wallRectangle, playerVelocity,
-                             CollisionFromLeft{});
 }
 
 constexpr auto pixelScale{4};
@@ -587,9 +614,9 @@ static auto run(const std::string &playerImagePath,
                                                     playerHorizontalVelocity}),
             wallRectangle));
     if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
-        playerPassesThroughFromAbove(
-            playerRectangle, wallRectangle,
-            {playerVerticalVelocity, playerHorizontalVelocity}))
+        playerPassesThrough(playerRectangle, wallRectangle,
+                            {playerVerticalVelocity, playerHorizontalVelocity},
+                            CollisionFromBelow{}))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, topEdge(wallRectangle));
     else if (bottomEdge(applyVerticalVelocity(
@@ -601,19 +628,34 @@ static auto run(const std::string &playerImagePath,
     const auto playerIsBeforeLeftOfWall =
         distanceFirstExceedsSecondHorizontally(playerRectangle, wallRectangle) <
         0;
+    const auto playerIsAfterRightOfWall =
+        distanceFirstExceedsSecondHorizontally(wallRectangle, playerRectangle) <
+        0;
     const auto playerWillBeAheadOfLeftOfWall =
         isNonnegative(distanceFirstExceedsSecondHorizontally(
             applyHorizontalVelocity(
                 playerRectangle,
                 {playerVerticalVelocity, playerHorizontalVelocity}),
             wallRectangle));
+    const auto playerWillBeBeforeRightOfWall =
+        isNonnegative(distanceFirstExceedsSecondHorizontally(
+            wallRectangle, applyHorizontalVelocity(
+                               playerRectangle, {playerVerticalVelocity,
+                                                 playerHorizontalVelocity})));
     if (playerIsBeforeLeftOfWall && playerWillBeAheadOfLeftOfWall &&
-        playerPassesThroughFromLeft(
-            playerRectangle, wallRectangle,
-            {playerVerticalVelocity, playerHorizontalVelocity})) {
+        playerPassesThrough(playerRectangle, wallRectangle,
+                            {playerVerticalVelocity, playerHorizontalVelocity},
+                            CollisionFromRight{})) {
       playerHorizontalVelocity = 0;
       playerRectangle.origin.x =
           leftEdge(wallRectangle) - playerRectangle.width;
+    } else if (playerIsAfterRightOfWall && playerWillBeBeforeRightOfWall &&
+               playerPassesThrough(
+                   playerRectangle, wallRectangle,
+                   {playerVerticalVelocity, playerHorizontalVelocity},
+                   CollisionFromLeft{})) {
+      playerHorizontalVelocity = 0;
+      playerRectangle.origin.x = rightEdge(wallRectangle) + 1;
     }
     playerRectangle.origin.x += playerHorizontalVelocity;
     playerRectangle = applyVerticalVelocity(
