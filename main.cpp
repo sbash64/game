@@ -419,19 +419,22 @@ static auto run(const std::string &playerImagePath,
                                                        playerVerticalVelocity),
                                  wallRectangle),
                              distanceFirstExceedsSecondHorizontally(
-                                 playerRectangle, wallRectangle) +
-                                 playerHorizontalVelocity}) ||
+                                 applyHorizontalVelocity(
+                                     playerRectangle, playerHorizontalVelocity),
+                                 wallRectangle)}) ||
          (playerHorizontalVelocity > 0 && playerWillBeRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge &&
           RationalNumber{round(playerVerticalVelocity),
                          playerHorizontalVelocity} <
-              RationalNumber{distanceFirstExceedsSecondVertically(
-                                 applyVerticalVelocity(playerRectangle,
-                                                       playerVerticalVelocity),
-                                 wallRectangle),
-                             playerHorizontalVelocity -
-                                 distanceFirstExceedsSecondHorizontally(
-                                     wallRectangle, playerRectangle)}) ||
+              RationalNumber{
+                  distanceFirstExceedsSecondVertically(
+                      applyVerticalVelocity(playerRectangle,
+                                            playerVerticalVelocity),
+                      wallRectangle),
+                  -distanceFirstExceedsSecondHorizontally(
+                      wallRectangle,
+                      applyHorizontalVelocity(playerRectangle,
+                                              -playerHorizontalVelocity))}) ||
          (playerHorizontalVelocity == 0 && playerIsRightOfWallsLeftEdge &&
           playerIsLeftOfWallsRightEdge)))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
