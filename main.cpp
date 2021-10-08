@@ -328,6 +328,49 @@ constexpr auto withFriction(int velocity, int friction) -> int {
   return ((velocity < 0) ? -1 : 1) * std::max(0, std::abs(velocity) - friction);
 }
 
+static auto playerPassesThrough(Rectangle playerRectangle,
+                                Rectangle wallRectangle,
+                                RationalNumber playerVerticalVelocity,
+                                int playerHorizontalVelocity) -> bool {
+  const auto distancePlayerWillBeBelowTopOfWall{
+      distanceFirstExceedsSecondVertically(
+          applyVerticalVelocity(playerRectangle, playerVerticalVelocity),
+          wallRectangle)};
+  const auto playerIsNotRightOfWall = isNonnegative(
+      distanceFirstExceedsSecondHorizontally(wallRectangle, playerRectangle));
+  const auto playerIsNotLeftOfWall = isNonnegative(
+      distanceFirstExceedsSecondHorizontally(playerRectangle, wallRectangle));
+  const auto playerHitsTopOfWallMovingRight{
+      playerHorizontalVelocity > 0 &&
+      isNonnegative(distanceFirstExceedsSecondHorizontally(
+          applyHorizontalVelocity(playerRectangle, playerHorizontalVelocity),
+          wallRectangle)) &&
+      playerIsNotRightOfWall &&
+      RationalNumber{round(playerVerticalVelocity), -playerHorizontalVelocity} >
+          RationalNumber{distancePlayerWillBeBelowTopOfWall,
+                         distanceFirstExceedsSecondHorizontally(
+                             wallRectangle,
+                             applyHorizontalVelocity(
+                                 playerRectangle, -playerHorizontalVelocity))}};
+  const auto playerHitsTopOfWallMovingLeft{
+      playerHorizontalVelocity < 0 &&
+      isNonnegative(distanceFirstExceedsSecondHorizontally(
+          wallRectangle, applyHorizontalVelocity(playerRectangle,
+                                                 playerHorizontalVelocity))) &&
+      playerIsNotLeftOfWall &&
+      RationalNumber{round(playerVerticalVelocity), playerHorizontalVelocity} >
+          RationalNumber{distancePlayerWillBeBelowTopOfWall,
+                         distanceFirstExceedsSecondHorizontally(
+                             applyHorizontalVelocity(playerRectangle,
+                                                     playerHorizontalVelocity),
+                             wallRectangle)}};
+  const auto playerHitsTopOfWallMovingDown{playerHorizontalVelocity == 0 &&
+                                           playerIsNotLeftOfWall &&
+                                           playerIsNotRightOfWall};
+  return playerHitsTopOfWallMovingLeft || playerHitsTopOfWallMovingRight ||
+         playerHitsTopOfWallMovingDown;
+}
+
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
@@ -386,46 +429,15 @@ static auto run(const std::string &playerImagePath,
     playerHorizontalVelocity =
         withFriction(clamp(playerHorizontalVelocity, playerMaxHorizontalSpeed),
                      groundFriction);
-    const auto distancePlayerWillBeBelowTopOfWall{
-        distanceFirstExceedsSecondVertically(
+    const auto playerIsAboveTopOfWall = distanceFirstExceedsSecondVertically(
+                                            playerRectangle, wallRectangle) < 0;
+    const auto playerWillBeBelowTopOfWall =
+        isNonnegative(distanceFirstExceedsSecondVertically(
             applyVerticalVelocity(playerRectangle, playerVerticalVelocity),
-            wallRectangle)};
-    if (distanceFirstExceedsSecondVertically(playerRectangle, wallRectangle) <
-            0 &&
-        isNonnegative(distancePlayerWillBeBelowTopOfWall) &&
-        ((playerHorizontalVelocity < 0 &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              wallRectangle, applyHorizontalVelocity(
-                                 playerRectangle, playerHorizontalVelocity))) &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              playerRectangle, wallRectangle)) &&
-          RationalNumber{round(playerVerticalVelocity),
-                         playerHorizontalVelocity} >
-              RationalNumber{distancePlayerWillBeBelowTopOfWall,
-                             distanceFirstExceedsSecondHorizontally(
-                                 applyHorizontalVelocity(
-                                     playerRectangle, playerHorizontalVelocity),
-                                 wallRectangle)}) ||
-         (playerHorizontalVelocity > 0 &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              applyHorizontalVelocity(playerRectangle,
-                                      playerHorizontalVelocity),
-              wallRectangle)) &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              wallRectangle, playerRectangle)) &&
-          RationalNumber{round(playerVerticalVelocity),
-                         -playerHorizontalVelocity} >
-              RationalNumber{
-                  distancePlayerWillBeBelowTopOfWall,
-                  distanceFirstExceedsSecondHorizontally(
-                      wallRectangle,
-                      applyHorizontalVelocity(playerRectangle,
-                                              -playerHorizontalVelocity))}) ||
-         (playerHorizontalVelocity == 0 &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              playerRectangle, wallRectangle)) &&
-          isNonnegative(distanceFirstExceedsSecondHorizontally(
-              wallRectangle, playerRectangle)))))
+            wallRectangle));
+    if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
+        playerPassesThrough(playerRectangle, wallRectangle,
+                            playerVerticalVelocity, playerHorizontalVelocity))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, topEdge(wallRectangle));
     else if (bottomEdge(applyVerticalVelocity(
