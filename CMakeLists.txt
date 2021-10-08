@@ -19,3 +19,5 @@ FetchContent_MakeAvailable(SDL_image)
 add_executable(sbash64-sdl-learn-main main.cpp)
 target_link_libraries(sbash64-sdl-learn-main SDL2::image SDL2::SDL2)
 target_compile_features(sbash64-sdl-learn-main PRIVATE cxx_std_20)
+target_compile_options(sbash64-sdl-learn-main
+                       PRIVATE "${SBASH64_GAME_WARNINGS}")
