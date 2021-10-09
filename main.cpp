@@ -21,8 +21,7 @@
 
 // https://stackoverflow.com/a/53067795
 static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
-  int bpp = surface->format->BytesPerPixel;
-  /* Here p is the address to the pixel we want to retrieve */
+  const auto bpp{surface->format->BytesPerPixel};
   const auto *p = static_cast<const Uint8 *>(surface->pixels) +
                   static_cast<std::ptrdiff_t>(y) * surface->pitch +
                   static_cast<std::ptrdiff_t>(x) * bpp;
@@ -39,7 +38,7 @@ static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
   case 4:
     return *reinterpret_cast<const Uint32 *>(p);
   default:
-    return 0; /* shouldn't happen, but avoids warnings */
+    return 0;
   }
 }
 
@@ -285,18 +284,50 @@ public:
   [[nodiscard]] virtual auto
   distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
       -> int = 0;
-  [[nodiscard]] virtual auto applyVelocityNormalToSurface(Rectangle a,
-                                                          Velocity b) const
-      -> Rectangle = 0;
-  [[nodiscard]] virtual auto applyVelocityParallelToSurface(Rectangle a,
-                                                            Velocity b) const
-      -> Rectangle = 0;
   [[nodiscard]] virtual auto combinedVelocity(Velocity a) const
       -> RationalNumber = 0;
   [[nodiscard]] virtual auto headingTowardUpperBoundary(Velocity a) const
       -> bool = 0;
   [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
       -> bool = 0;
+};
+
+class CollisionAxis {
+public:
+  [[nodiscard]] virtual auto applyVelocityNormalToSurface(Rectangle a,
+                                                          Velocity b) const
+      -> Rectangle = 0;
+  [[nodiscard]] virtual auto applyVelocityParallelToSurface(Rectangle a,
+                                                            Velocity b) const
+      -> Rectangle = 0;
+};
+
+class HorizontalCollision : public CollisionAxis {
+public:
+  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
+      -> Rectangle override {
+    return applyHorizontalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
+                                                    Velocity b) const
+      -> Rectangle override {
+    return applyVerticalVelocity(a, b);
+  }
+};
+
+class VerticalCollision : public CollisionAxis {
+public:
+  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
+      -> Rectangle override {
+    return applyVerticalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
+                                                    Velocity b) const
+      -> Rectangle override {
+    return applyHorizontalVelocity(a, b);
+  }
 };
 
 class CollisionFromBelow : public Collision {
@@ -311,17 +342,6 @@ public:
   distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
       -> int override {
     return distanceFirstExceedsSecondVertically(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
-      -> Rectangle override {
-    return applyVerticalVelocity(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
-                                                    Velocity b) const
-      -> Rectangle override {
-    return applyHorizontalVelocity(a, b);
   }
 
   [[nodiscard]] auto combinedVelocity(Velocity a) const
@@ -354,17 +374,6 @@ public:
     return distanceFirstExceedsSecondVertically(b, a);
   }
 
-  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
-      -> Rectangle override {
-    return applyVerticalVelocity(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
-                                                    Velocity b) const
-      -> Rectangle override {
-    return applyHorizontalVelocity(a, b);
-  }
-
   [[nodiscard]] auto combinedVelocity(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{-round(a.vertical), a.horizontal};
@@ -393,17 +402,6 @@ public:
   distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
       -> int override {
     return distanceFirstExceedsSecondHorizontally(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
-      -> Rectangle override {
-    return applyHorizontalVelocity(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
-                                                    Velocity b) const
-      -> Rectangle override {
-    return applyVerticalVelocity(a, b);
   }
 
   [[nodiscard]] auto combinedVelocity(Velocity a) const
@@ -436,17 +434,6 @@ public:
     return distanceFirstExceedsSecondHorizontally(b, a);
   }
 
-  [[nodiscard]] auto applyVelocityNormalToSurface(Rectangle a, Velocity b) const
-      -> Rectangle override {
-    return applyHorizontalVelocity(a, b);
-  }
-
-  [[nodiscard]] auto applyVelocityParallelToSurface(Rectangle a,
-                                                    Velocity b) const
-      -> Rectangle override {
-    return applyVerticalVelocity(a, b);
-  }
-
   [[nodiscard]] auto combinedVelocity(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{-a.horizontal, round(a.vertical)};
@@ -466,7 +453,8 @@ public:
 static auto playerPassesThrough(Rectangle playerRectangle,
                                 Rectangle wallRectangle,
                                 Velocity playerVelocity,
-                                const Collision &collision) -> bool {
+                                const Collision &collision,
+                                const CollisionAxis &axis) -> bool {
   const auto playerDoesNotExceedWallsUpperBoundary =
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
           wallRectangle, playerRectangle));
@@ -476,8 +464,7 @@ static auto playerPassesThrough(Rectangle playerRectangle,
   const auto playerPassesThroughWallTowardUpperBoundary{
       collision.headingTowardUpperBoundary(playerVelocity) &&
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
-          collision.applyVelocityParallelToSurface(playerRectangle,
-                                                   playerVelocity),
+          axis.applyVelocityParallelToSurface(playerRectangle, playerVelocity),
           wallRectangle)) &&
       playerDoesNotExceedWallsUpperBoundary &&
       collision.combinedVelocity(playerVelocity) >
@@ -490,7 +477,7 @@ static auto playerPassesThrough(Rectangle playerRectangle,
   const auto playerPassesThroughWallTowardLowerBoundary{
       collision.headingTowardLowerBoundary(playerVelocity) &&
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
-          wallRectangle, collision.applyVelocityParallelToSurface(
+          wallRectangle, axis.applyVelocityParallelToSurface(
                              playerRectangle, playerVelocity))) &&
       playerDoesNotPrecedeWallsLowerBoundary &&
       collision.combinedVelocity(playerVelocity) <
@@ -697,14 +684,14 @@ static auto run(const std::string &playerImagePath,
     if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
         playerPassesThrough(playerRectangle, blockRectangle,
                             {playerVerticalVelocity, playerHorizontalVelocity},
-                            CollisionFromBelow{}))
+                            CollisionFromBelow{}, VerticalCollision{}))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, topEdge(blockRectangle));
     else if (playerIsBelowBottomOfWall && playerWillBeAboveBottomOfWall &&
              playerPassesThrough(
                  playerRectangle, blockRectangle,
                  {playerVerticalVelocity, playerHorizontalVelocity},
-                 CollisionFromAbove{})) {
+                 CollisionFromAbove{}, VerticalCollision{})) {
       playerVerticalVelocity = {0, 1};
       playerRectangle.origin.y = bottomEdge(blockRectangle) + 1;
     } else if (bottomEdge(applyVerticalVelocity(
@@ -733,7 +720,7 @@ static auto run(const std::string &playerImagePath,
     if (playerIsBeforeLeftOfWall && playerWillBeAheadOfLeftOfWall &&
         playerPassesThrough(playerRectangle, blockRectangle,
                             {playerVerticalVelocity, playerHorizontalVelocity},
-                            CollisionFromRight{})) {
+                            CollisionFromRight{}, HorizontalCollision{})) {
       playerHorizontalVelocity = 0;
       playerRectangle.origin.x =
           leftEdge(blockRectangle) - playerRectangle.width;
@@ -741,7 +728,7 @@ static auto run(const std::string &playerImagePath,
                playerPassesThrough(
                    playerRectangle, blockRectangle,
                    {playerVerticalVelocity, playerHorizontalVelocity},
-                   CollisionFromLeft{})) {
+                   CollisionFromLeft{}, HorizontalCollision{})) {
       playerHorizontalVelocity = 0;
       playerRectangle.origin.x = rightEdge(blockRectangle) + 1;
     }
