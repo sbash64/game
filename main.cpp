@@ -650,9 +650,9 @@ static auto run(const std::string &playerImagePath,
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
-  const RationalNumber playerJumpAcceleration{-5, 1};
+  const RationalNumber playerJumpAcceleration{-6, 1};
   const auto playerRunAcceleration{2};
-  Rectangle blockRectangle{Point{256, 144}, 40, 40};
+  Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRect{Point{0, 0}, cameraWidth, cameraHeight};
   while (playing) {
     SDL_Event event;
@@ -776,9 +776,6 @@ static auto run(const std::string &playerImagePath,
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
                      &backgroundSourceRectConverted, &backgroundProjection, 0,
                      nullptr, SDL_FLIP_NONE);
-    SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
-    const auto wallProjection{toSDLRect(blockRectangle * pixelScale)};
-    SDL_RenderFillRect(rendererWrapper.renderer, &wallProjection);
     const auto playerProjection{toSDLRect(playerRectangle * pixelScale)};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
                      &playerSourceRect, &playerProjection, 0, nullptr,
