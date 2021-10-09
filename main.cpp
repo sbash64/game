@@ -605,8 +605,7 @@ static auto run(const std::string &playerImagePath,
   const auto ground{cameraHeight - 32};
   Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
                             playerHeight};
-  auto playerHorizontalVelocity{0};
-  RationalNumber playerVerticalVelocity{0, 1};
+  Velocity playerVelocity{{0, 1}, 0};
   auto playerJumpState{JumpState::grounded};
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
@@ -621,92 +620,81 @@ static auto run(const std::string &playerImagePath,
       playing = event.type != SDL_QUIT;
     const auto *keyStates{SDL_GetKeyboardState(nullptr)};
     if (pressing(keyStates, SDL_SCANCODE_LEFT))
-      playerHorizontalVelocity -= playerRunAcceleration;
+      playerVelocity.horizontal -= playerRunAcceleration;
     if (pressing(keyStates, SDL_SCANCODE_RIGHT))
-      playerHorizontalVelocity += playerRunAcceleration;
+      playerVelocity.horizontal += playerRunAcceleration;
     if (pressing(keyStates, SDL_SCANCODE_UP) &&
         playerJumpState == JumpState::grounded) {
       playerJumpState = JumpState::started;
-      playerVerticalVelocity += playerJumpAcceleration;
+      playerVelocity.vertical += playerJumpAcceleration;
     }
-    playerVerticalVelocity += gravity;
+    playerVelocity.vertical += gravity;
     if (!pressing(keyStates, SDL_SCANCODE_UP) &&
         playerJumpState == JumpState::started) {
       playerJumpState = JumpState::released;
-      if (playerVerticalVelocity.numerator < 0)
-        playerVerticalVelocity = {0, 1};
+      if (playerVelocity.vertical.numerator < 0)
+        playerVelocity.vertical = {0, 1};
     }
-    playerHorizontalVelocity =
-        withFriction(clamp(playerHorizontalVelocity, playerMaxHorizontalSpeed),
+    playerVelocity.horizontal =
+        withFriction(clamp(playerVelocity.horizontal, playerMaxHorizontalSpeed),
                      groundFriction);
-    const auto playerIsAboveTopOfWall =
+    const auto playerIsAboveTopOfBlock =
         distanceFirstExceedsSecondVertically(playerRectangle, blockRectangle) <
         0;
-    const auto playerIsBelowBottomOfWall =
+    const auto playerIsBelowBottomOfBlock =
         distanceFirstExceedsSecondVertically(blockRectangle, playerRectangle) <
         0;
-    const auto playerWillBeBelowTopOfWall =
+    const auto playerWillBeBelowTopOfBlock =
         isNonnegative(distanceFirstExceedsSecondVertically(
-            applyVerticalVelocity(playerRectangle, {playerVerticalVelocity,
-                                                    playerHorizontalVelocity}),
+            applyVerticalVelocity(playerRectangle, playerVelocity),
             blockRectangle));
-    const auto playerWillBeAboveBottomOfWall =
+    const auto playerWillBeAboveBottomOfBlock =
         isNonnegative(distanceFirstExceedsSecondVertically(
-            blockRectangle, applyVerticalVelocity(playerRectangle,
-                                                  {playerVerticalVelocity,
-                                                   playerHorizontalVelocity})));
-    if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
-        passesThrough(playerRectangle, blockRectangle,
-                      {playerVerticalVelocity, playerHorizontalVelocity},
+            blockRectangle,
+            applyVerticalVelocity(playerRectangle, playerVelocity)));
+    if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
+        passesThrough(playerRectangle, blockRectangle, playerVelocity,
                       CollisionFromBelow{}, VerticalCollision{}))
-      onPlayerHitGround(playerVerticalVelocity, playerRectangle,
+      onPlayerHitGround(playerVelocity.vertical, playerRectangle,
                         playerJumpState, topEdge(blockRectangle));
-    else if (playerIsBelowBottomOfWall && playerWillBeAboveBottomOfWall &&
-             passesThrough(playerRectangle, blockRectangle,
-                           {playerVerticalVelocity, playerHorizontalVelocity},
+    else if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
+             passesThrough(playerRectangle, blockRectangle, playerVelocity,
                            CollisionFromAbove{}, VerticalCollision{})) {
-      playerVerticalVelocity = {0, 1};
+      playerVelocity.vertical = {0, 1};
       playerRectangle.origin.y = bottomEdge(blockRectangle) + 1;
-    } else if (bottomEdge(applyVerticalVelocity(
-                   playerRectangle, {playerVerticalVelocity,
-                                     playerHorizontalVelocity})) >= ground)
-      onPlayerHitGround(playerVerticalVelocity, playerRectangle,
+    } else if (bottomEdge(applyVerticalVelocity(playerRectangle,
+                                                playerVelocity)) >= ground)
+      onPlayerHitGround(playerVelocity.vertical, playerRectangle,
                         playerJumpState, ground);
 
-    const auto playerIsBeforeLeftOfWall =
+    const auto playerIsBeforeLeftOfBlock =
         distanceFirstExceedsSecondHorizontally(playerRectangle,
                                                blockRectangle) < 0;
-    const auto playerIsAfterRightOfWall =
+    const auto playerIsAfterRightOfBlock =
         distanceFirstExceedsSecondHorizontally(blockRectangle,
                                                playerRectangle) < 0;
-    const auto playerWillBeAheadOfLeftOfWall =
+    const auto playerWillBeAheadOfLeftOfBlock =
         isNonnegative(distanceFirstExceedsSecondHorizontally(
-            applyHorizontalVelocity(
-                playerRectangle,
-                {playerVerticalVelocity, playerHorizontalVelocity}),
+            applyHorizontalVelocity(playerRectangle, playerVelocity),
             blockRectangle));
-    const auto playerWillBeBeforeRightOfWall =
+    const auto playerWillBeBeforeRightOfBlock =
         isNonnegative(distanceFirstExceedsSecondHorizontally(
-            blockRectangle, applyHorizontalVelocity(
-                                playerRectangle, {playerVerticalVelocity,
-                                                  playerHorizontalVelocity})));
-    if (playerIsBeforeLeftOfWall && playerWillBeAheadOfLeftOfWall &&
-        passesThrough(playerRectangle, blockRectangle,
-                      {playerVerticalVelocity, playerHorizontalVelocity},
+            blockRectangle,
+            applyHorizontalVelocity(playerRectangle, playerVelocity)));
+    if (playerIsBeforeLeftOfBlock && playerWillBeAheadOfLeftOfBlock &&
+        passesThrough(playerRectangle, blockRectangle, playerVelocity,
                       CollisionFromRight{}, HorizontalCollision{})) {
-      playerHorizontalVelocity = 0;
+      playerVelocity.horizontal = 0;
       playerRectangle.origin.x =
           leftEdge(blockRectangle) - playerRectangle.width;
-    } else if (playerIsAfterRightOfWall && playerWillBeBeforeRightOfWall &&
-               passesThrough(playerRectangle, blockRectangle,
-                             {playerVerticalVelocity, playerHorizontalVelocity},
+    } else if (playerIsAfterRightOfBlock && playerWillBeBeforeRightOfBlock &&
+               passesThrough(playerRectangle, blockRectangle, playerVelocity,
                              CollisionFromLeft{}, HorizontalCollision{})) {
-      playerHorizontalVelocity = 0;
+      playerVelocity.horizontal = 0;
       playerRectangle.origin.x = rightEdge(blockRectangle) + 1;
     }
-    playerRectangle.origin.x += playerHorizontalVelocity;
-    playerRectangle = applyVerticalVelocity(
-        playerRectangle, {playerVerticalVelocity, playerHorizontalVelocity});
+    playerRectangle.origin.x += playerVelocity.horizontal;
+    playerRectangle = applyVerticalVelocity(playerRectangle, playerVelocity);
     const auto playerDistanceRightOfCenter{
         playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2};
     const auto distanceFromBackgroundRightEdgeToEnd{
