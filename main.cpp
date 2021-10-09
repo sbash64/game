@@ -286,10 +286,6 @@ public:
       -> int = 0;
   [[nodiscard]] virtual auto combinedVelocity(Velocity a) const
       -> RationalNumber = 0;
-  [[nodiscard]] virtual auto headingTowardUpperBoundary(Velocity a) const
-      -> bool = 0;
-  [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
-      -> bool = 0;
 };
 
 class CollisionAxis {
@@ -300,6 +296,10 @@ public:
   [[nodiscard]] virtual auto applyVelocityParallelToSurface(Rectangle a,
                                                             Velocity b) const
       -> Rectangle = 0;
+  [[nodiscard]] virtual auto headingTowardUpperBoundary(Velocity a) const
+      -> bool = 0;
+  [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
+      -> bool = 0;
 };
 
 class HorizontalCollision : public CollisionAxis {
@@ -314,6 +314,16 @@ public:
       -> Rectangle override {
     return applyVerticalVelocity(a, b);
   }
+
+  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
+      -> bool override {
+    return round(a.vertical) > 0;
+  }
+
+  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
+      -> bool override {
+    return round(a.vertical) < 0;
+  }
 };
 
 class VerticalCollision : public CollisionAxis {
@@ -327,6 +337,16 @@ public:
                                                     Velocity b) const
       -> Rectangle override {
     return applyHorizontalVelocity(a, b);
+  }
+
+  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
+      -> bool override {
+    return a.horizontal > 0;
+  }
+
+  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
+      -> bool override {
+    return a.horizontal < 0;
   }
 };
 
@@ -348,16 +368,6 @@ public:
       -> RationalNumber override {
     return RationalNumber{round(a.vertical), a.horizontal};
   }
-
-  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
-      -> bool override {
-    return a.horizontal > 0;
-  }
-
-  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
-      -> bool override {
-    return a.horizontal < 0;
-  }
 };
 
 class CollisionFromAbove : public Collision {
@@ -377,16 +387,6 @@ public:
   [[nodiscard]] auto combinedVelocity(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{-round(a.vertical), a.horizontal};
-  }
-
-  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
-      -> bool override {
-    return a.horizontal > 0;
-  }
-
-  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
-      -> bool override {
-    return a.horizontal < 0;
   }
 };
 
@@ -408,16 +408,6 @@ public:
       -> RationalNumber override {
     return RationalNumber{a.horizontal, round(a.vertical)};
   }
-
-  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
-      -> bool override {
-    return round(a.vertical) > 0;
-  }
-
-  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
-      -> bool override {
-    return round(a.vertical) < 0;
-  }
 };
 
 class CollisionFromLeft : public Collision {
@@ -438,16 +428,6 @@ public:
       -> RationalNumber override {
     return RationalNumber{-a.horizontal, round(a.vertical)};
   }
-
-  [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
-      -> bool override {
-    return round(a.vertical) > 0;
-  }
-
-  [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
-      -> bool override {
-    return round(a.vertical) < 0;
-  }
 };
 
 static auto playerPassesThrough(Rectangle playerRectangle,
@@ -462,7 +442,7 @@ static auto playerPassesThrough(Rectangle playerRectangle,
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
           playerRectangle, wallRectangle));
   const auto playerPassesThroughWallTowardUpperBoundary{
-      collision.headingTowardUpperBoundary(playerVelocity) &&
+      axis.headingTowardUpperBoundary(playerVelocity) &&
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
           axis.applyVelocityParallelToSurface(playerRectangle, playerVelocity),
           wallRectangle)) &&
@@ -475,7 +455,7 @@ static auto playerPassesThrough(Rectangle playerRectangle,
                              wallRectangle, playerRectangle) +
                              1}};
   const auto playerPassesThroughWallTowardLowerBoundary{
-      collision.headingTowardLowerBoundary(playerVelocity) &&
+      axis.headingTowardLowerBoundary(playerVelocity) &&
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
           wallRectangle, axis.applyVelocityParallelToSurface(
                              playerRectangle, playerVelocity))) &&
@@ -488,8 +468,8 @@ static auto playerPassesThrough(Rectangle playerRectangle,
                              playerRectangle, wallRectangle) +
                              1}};
   const auto playerPassesThroughWallDirectly{
-      !collision.headingTowardUpperBoundary(playerVelocity) &&
-      !collision.headingTowardLowerBoundary(playerVelocity) &&
+      !axis.headingTowardUpperBoundary(playerVelocity) &&
+      !axis.headingTowardLowerBoundary(playerVelocity) &&
       playerDoesNotPrecedeWallsLowerBoundary &&
       playerDoesNotExceedWallsUpperBoundary};
   return playerPassesThroughWallTowardLowerBoundary ||
