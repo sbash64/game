@@ -278,10 +278,10 @@ constexpr auto isNonnegative(int a) -> bool { return a >= 0; }
 
 class Collision {
 public:
-  [[nodiscard]] virtual auto
-  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+  [[nodiscard]] virtual auto distanceSubjectPenetratesObject(Rectangle a,
+                                                             Rectangle b) const
       -> int = 0;
-  [[nodiscard]] virtual auto combinedVelocity(Velocity a) const
+  [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber = 0;
 };
 
@@ -365,12 +365,14 @@ public:
 class CollisionFromBelow : public Collision {
 public:
   [[nodiscard]] auto
-  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+  distanceSubjectPenetratesObject(Rectangle subjectRectangle,
+                                  Rectangle objectRectangle) const
       -> int override {
-    return distanceFirstExceedsSecondVertically(a, b);
+    return distanceFirstExceedsSecondVertically(subjectRectangle,
+                                                objectRectangle);
   }
 
-  [[nodiscard]] auto combinedVelocity(Velocity a) const
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{round(a.vertical), a.horizontal};
   }
@@ -379,12 +381,14 @@ public:
 class CollisionFromAbove : public Collision {
 public:
   [[nodiscard]] auto
-  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+  distanceSubjectPenetratesObject(Rectangle subjectRectangle,
+                                  Rectangle objectRectangle) const
       -> int override {
-    return distanceFirstExceedsSecondVertically(b, a);
+    return distanceFirstExceedsSecondVertically(objectRectangle,
+                                                subjectRectangle);
   }
 
-  [[nodiscard]] auto combinedVelocity(Velocity a) const
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{-round(a.vertical), a.horizontal};
   }
@@ -393,12 +397,14 @@ public:
 class CollisionFromRight : public Collision {
 public:
   [[nodiscard]] auto
-  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+  distanceSubjectPenetratesObject(Rectangle subjectRectangle,
+                                  Rectangle objectRectangle) const
       -> int override {
-    return distanceFirstExceedsSecondHorizontally(a, b);
+    return distanceFirstExceedsSecondHorizontally(subjectRectangle,
+                                                  objectRectangle);
   }
 
-  [[nodiscard]] auto combinedVelocity(Velocity a) const
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{a.horizontal, round(a.vertical)};
   }
@@ -407,62 +413,63 @@ public:
 class CollisionFromLeft : public Collision {
 public:
   [[nodiscard]] auto
-  distanceFirstExceedsSecondNormalToSurface(Rectangle a, Rectangle b) const
+  distanceSubjectPenetratesObject(Rectangle subjectRectangle,
+                                  Rectangle objectRectangle) const
       -> int override {
-    return distanceFirstExceedsSecondHorizontally(b, a);
+    return distanceFirstExceedsSecondHorizontally(objectRectangle,
+                                                  subjectRectangle);
   }
 
-  [[nodiscard]] auto combinedVelocity(Velocity a) const
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
     return RationalNumber{-a.horizontal, round(a.vertical)};
   }
 };
 
-static auto playerPassesThrough(Rectangle playerRectangle,
-                                Rectangle wallRectangle,
-                                Velocity playerVelocity,
-                                const Collision &collision,
-                                const CollisionAxis &axis) -> bool {
-  const auto playerDoesNotExceedWallsUpperBoundary =
+static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
+                          Velocity subjectVelocity, const Collision &collision,
+                          const CollisionAxis &axis) -> bool {
+  const auto subjectDoesNotExceedObjectsUpperBoundary =
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          wallRectangle, playerRectangle));
-  const auto playerDoesNotPrecedeWallsLowerBoundary =
+          objectRectangle, subjectRectangle));
+  const auto subjectDoesNotPrecedeObjectsLowerBoundary =
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          playerRectangle, wallRectangle));
-  const auto playerPassesThroughWallTowardUpperBoundary{
-      axis.headingTowardUpperBoundary(playerVelocity) &&
+          subjectRectangle, objectRectangle));
+  const auto subjectPassesThroughObjectTowardUpperBoundary{
+      axis.headingTowardUpperBoundary(subjectVelocity) &&
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          axis.applyVelocityParallelToSurface(playerRectangle, playerVelocity),
-          wallRectangle)) &&
-      playerDoesNotExceedWallsUpperBoundary &&
-      collision.combinedVelocity(playerVelocity) >
-          RationalNumber{-(collision.distanceFirstExceedsSecondNormalToSurface(
-                               playerRectangle, wallRectangle) +
+          axis.applyVelocityParallelToSurface(subjectRectangle,
+                                              subjectVelocity),
+          objectRectangle)) &&
+      subjectDoesNotExceedObjectsUpperBoundary &&
+      collision.surfaceRelativeSlope(subjectVelocity) >
+          RationalNumber{-(collision.distanceSubjectPenetratesObject(
+                               subjectRectangle, objectRectangle) +
                            1),
                          axis.distanceFirstExceedsSecondParallelToSurface(
-                             wallRectangle, playerRectangle) +
+                             objectRectangle, subjectRectangle) +
                              1}};
-  const auto playerPassesThroughWallTowardLowerBoundary{
-      axis.headingTowardLowerBoundary(playerVelocity) &&
+  const auto subjectPassesThroughObjectTowardLowerBoundary{
+      axis.headingTowardLowerBoundary(subjectVelocity) &&
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          wallRectangle, axis.applyVelocityParallelToSurface(
-                             playerRectangle, playerVelocity))) &&
-      playerDoesNotPrecedeWallsLowerBoundary &&
-      collision.combinedVelocity(playerVelocity) <
-          RationalNumber{collision.distanceFirstExceedsSecondNormalToSurface(
-                             playerRectangle, wallRectangle) +
+          objectRectangle, axis.applyVelocityParallelToSurface(
+                               subjectRectangle, subjectVelocity))) &&
+      subjectDoesNotPrecedeObjectsLowerBoundary &&
+      collision.surfaceRelativeSlope(subjectVelocity) <
+          RationalNumber{collision.distanceSubjectPenetratesObject(
+                             subjectRectangle, objectRectangle) +
                              1,
                          axis.distanceFirstExceedsSecondParallelToSurface(
-                             playerRectangle, wallRectangle) +
+                             subjectRectangle, objectRectangle) +
                              1}};
-  const auto playerPassesThroughWallDirectly{
-      !axis.headingTowardUpperBoundary(playerVelocity) &&
-      !axis.headingTowardLowerBoundary(playerVelocity) &&
-      playerDoesNotPrecedeWallsLowerBoundary &&
-      playerDoesNotExceedWallsUpperBoundary};
-  return playerPassesThroughWallTowardLowerBoundary ||
-         playerPassesThroughWallTowardUpperBoundary ||
-         playerPassesThroughWallDirectly;
+  const auto subjectPassesThroughObjectDirectly{
+      !axis.headingTowardUpperBoundary(subjectVelocity) &&
+      !axis.headingTowardLowerBoundary(subjectVelocity) &&
+      subjectDoesNotPrecedeObjectsLowerBoundary &&
+      subjectDoesNotExceedObjectsUpperBoundary};
+  return subjectPassesThroughObjectTowardLowerBoundary ||
+         subjectPassesThroughObjectTowardUpperBoundary ||
+         subjectPassesThroughObjectDirectly;
 }
 
 constexpr auto pixelScale{4};
@@ -590,7 +597,6 @@ static auto run(const std::string &playerImagePath,
   const SDL_Rect playerSourceRect{1, 9, playerWidth, playerHeight};
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
-  const auto backgroundSourceHeight{backgroundImageSurfaceWrapper.surface->h};
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
   sdl_wrappers::Texture backgroundTextureWrapper{
@@ -650,16 +656,15 @@ static auto run(const std::string &playerImagePath,
                                                   {playerVerticalVelocity,
                                                    playerHorizontalVelocity})));
     if (playerIsAboveTopOfWall && playerWillBeBelowTopOfWall &&
-        playerPassesThrough(playerRectangle, blockRectangle,
-                            {playerVerticalVelocity, playerHorizontalVelocity},
-                            CollisionFromBelow{}, VerticalCollision{}))
+        passesThrough(playerRectangle, blockRectangle,
+                      {playerVerticalVelocity, playerHorizontalVelocity},
+                      CollisionFromBelow{}, VerticalCollision{}))
       onPlayerHitGround(playerVerticalVelocity, playerRectangle,
                         playerJumpState, topEdge(blockRectangle));
     else if (playerIsBelowBottomOfWall && playerWillBeAboveBottomOfWall &&
-             playerPassesThrough(
-                 playerRectangle, blockRectangle,
-                 {playerVerticalVelocity, playerHorizontalVelocity},
-                 CollisionFromAbove{}, VerticalCollision{})) {
+             passesThrough(playerRectangle, blockRectangle,
+                           {playerVerticalVelocity, playerHorizontalVelocity},
+                           CollisionFromAbove{}, VerticalCollision{})) {
       playerVerticalVelocity = {0, 1};
       playerRectangle.origin.y = bottomEdge(blockRectangle) + 1;
     } else if (bottomEdge(applyVerticalVelocity(
@@ -686,17 +691,16 @@ static auto run(const std::string &playerImagePath,
                                 playerRectangle, {playerVerticalVelocity,
                                                   playerHorizontalVelocity})));
     if (playerIsBeforeLeftOfWall && playerWillBeAheadOfLeftOfWall &&
-        playerPassesThrough(playerRectangle, blockRectangle,
-                            {playerVerticalVelocity, playerHorizontalVelocity},
-                            CollisionFromRight{}, HorizontalCollision{})) {
+        passesThrough(playerRectangle, blockRectangle,
+                      {playerVerticalVelocity, playerHorizontalVelocity},
+                      CollisionFromRight{}, HorizontalCollision{})) {
       playerHorizontalVelocity = 0;
       playerRectangle.origin.x =
           leftEdge(blockRectangle) - playerRectangle.width;
     } else if (playerIsAfterRightOfWall && playerWillBeBeforeRightOfWall &&
-               playerPassesThrough(
-                   playerRectangle, blockRectangle,
-                   {playerVerticalVelocity, playerHorizontalVelocity},
-                   CollisionFromLeft{}, HorizontalCollision{})) {
+               passesThrough(playerRectangle, blockRectangle,
+                             {playerVerticalVelocity, playerHorizontalVelocity},
+                             CollisionFromLeft{}, HorizontalCollision{})) {
       playerHorizontalVelocity = 0;
       playerRectangle.origin.x = rightEdge(blockRectangle) + 1;
     }
@@ -722,8 +726,6 @@ static auto run(const std::string &playerImagePath,
       blockRectangle.origin.x -= shift;
       playerRectangle.origin.x -= shift;
     }
-    // SDL_SetRenderDrawColor(rendererWrapper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-    // SDL_RenderClear(rendererWrapper.renderer);
     const auto backgroundSourceRectConverted{toSDLRect(backgroundSourceRect)};
     const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
     const auto backgroundProjection{
