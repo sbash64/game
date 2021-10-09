@@ -696,7 +696,8 @@ static auto run(const std::string &playerImagePath,
     playerRectangle.origin.x += playerVelocity.horizontal;
     playerRectangle = applyVerticalVelocity(playerRectangle, playerVelocity);
     const auto playerDistanceRightOfCenter{
-        playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2};
+        playerRectangle.origin.x + playerRectangle.width / 2 - cameraWidth / 2 -
+        backgroundSourceRect.origin.x};
     const auto distanceFromBackgroundRightEdgeToEnd{
         backgroundSourceWidth - rightEdge(backgroundSourceRect) - 1};
     if (playerDistanceRightOfCenter > 0 &&
@@ -704,15 +705,11 @@ static auto run(const std::string &playerImagePath,
       const auto shift{std::min(distanceFromBackgroundRightEdgeToEnd,
                                 playerDistanceRightOfCenter)};
       backgroundSourceRect.origin.x += shift;
-      blockRectangle.origin.x -= shift;
-      playerRectangle.origin.x -= shift;
     } else if (playerDistanceRightOfCenter < 0 &&
                leftEdge(backgroundSourceRect) > 0) {
       const auto shift{std::max(-leftEdge(backgroundSourceRect),
                                 playerDistanceRightOfCenter)};
       backgroundSourceRect.origin.x += shift;
-      blockRectangle.origin.x -= shift;
-      playerRectangle.origin.x -= shift;
     }
     const auto backgroundSourceRectConverted{toSDLRect(backgroundSourceRect)};
     const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
@@ -721,7 +718,9 @@ static auto run(const std::string &playerImagePath,
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
                      &backgroundSourceRectConverted, &backgroundProjection, 0,
                      nullptr, SDL_FLIP_NONE);
-    const auto playerProjection{toSDLRect(playerRectangle * pixelScale)};
+    auto playerPreProjection{playerRectangle};
+    playerPreProjection.origin.x -= backgroundSourceRect.origin.x;
+    const auto playerProjection{toSDLRect(playerPreProjection * pixelScale)};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
                      &playerSourceRect, &playerProjection, 0, nullptr,
                      SDL_FLIP_NONE);
