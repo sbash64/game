@@ -665,6 +665,38 @@ static void shiftBackground(Rectangle &backgroundSourceRectangle,
                  playerDistanceRightOfCameraCenter);
 }
 
+static void applyHorizontalForces(Velocity &playerVelocity, int groundFriction,
+                                  int playerMaxHorizontalSpeed,
+                                  int playerRunAcceleration) {
+  const auto *keyStates{SDL_GetKeyboardState(nullptr)};
+  if (pressing(keyStates, SDL_SCANCODE_LEFT))
+    playerVelocity.horizontal -= playerRunAcceleration;
+  if (pressing(keyStates, SDL_SCANCODE_RIGHT))
+    playerVelocity.horizontal += playerRunAcceleration;
+  playerVelocity.horizontal =
+      withFriction(clamp(playerVelocity.horizontal, playerMaxHorizontalSpeed),
+                   groundFriction);
+}
+
+static void applyVerticalForces(Velocity &playerVelocity,
+                                JumpState &playerJumpState,
+                                RationalNumber playerJumpAcceleration,
+                                RationalNumber gravity) {
+  const auto *keyStates{SDL_GetKeyboardState(nullptr)};
+  if (pressing(keyStates, SDL_SCANCODE_UP) &&
+      playerJumpState == JumpState::grounded) {
+    playerJumpState = JumpState::started;
+    playerVelocity.vertical += playerJumpAcceleration;
+  }
+  playerVelocity.vertical += gravity;
+  if (!pressing(keyStates, SDL_SCANCODE_UP) &&
+      playerJumpState == JumpState::started) {
+    playerJumpState = JumpState::released;
+    if (playerVelocity.vertical < 0)
+      playerVelocity.vertical = {0, 1};
+  }
+}
+
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
@@ -701,26 +733,10 @@ static auto run(const std::string &playerImagePath,
     SDL_Event event;
     while (SDL_PollEvent(&event) != 0)
       playing = event.type != SDL_QUIT;
-    const auto *keyStates{SDL_GetKeyboardState(nullptr)};
-    if (pressing(keyStates, SDL_SCANCODE_LEFT))
-      playerVelocity.horizontal -= playerRunAcceleration;
-    if (pressing(keyStates, SDL_SCANCODE_RIGHT))
-      playerVelocity.horizontal += playerRunAcceleration;
-    playerVelocity.horizontal =
-        withFriction(clamp(playerVelocity.horizontal, playerMaxHorizontalSpeed),
-                     groundFriction);
-    if (pressing(keyStates, SDL_SCANCODE_UP) &&
-        playerJumpState == JumpState::grounded) {
-      playerJumpState = JumpState::started;
-      playerVelocity.vertical += playerJumpAcceleration;
-    }
-    playerVelocity.vertical += gravity;
-    if (!pressing(keyStates, SDL_SCANCODE_UP) &&
-        playerJumpState == JumpState::started) {
-      playerJumpState = JumpState::released;
-      if (playerVelocity.vertical < 0)
-        playerVelocity.vertical = {0, 1};
-    }
+    applyHorizontalForces(playerVelocity, groundFriction,
+                          playerMaxHorizontalSpeed, playerRunAcceleration);
+    applyVerticalForces(playerVelocity, playerJumpState, playerJumpAcceleration,
+                        gravity);
 
     handleVerticalCollisions(playerRectangle, playerVelocity, playerJumpState,
                              blockRectangle, ground);
