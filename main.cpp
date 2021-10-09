@@ -115,10 +115,31 @@ constexpr auto operator>=(RationalNumber a, RationalNumber b) -> bool {
   return !(a < b);
 }
 
-constexpr auto round(RationalNumber a) -> int {
-  return a.numerator / a.denominator +
-         (a.numerator % a.denominator >= (a.denominator + 1) / 2 ? 1 : 0);
+constexpr auto operator<(RationalNumber a, int b) -> bool {
+  return a.denominator < 0 ? a.numerator > b * a.denominator
+                           : a.numerator < b * a.denominator;
 }
+
+constexpr auto operator>(RationalNumber a, int b) -> bool {
+  return a.denominator < 0 ? a.numerator < b * a.denominator
+                           : a.numerator > b * a.denominator;
+}
+
+constexpr auto absoluteValue(int a) -> int { return a < 0 ? -a : a; }
+
+constexpr auto round(RationalNumber a) -> int {
+  const auto division{a.numerator / a.denominator};
+  if (absoluteValue(a.numerator) % a.denominator <
+      (absoluteValue(a.denominator) + 1) / 2)
+    return division;
+  return (a.numerator < 0 ^ a.denominator < 0) != 0 ? division - 1
+                                                    : division + 1;
+}
+
+static_assert(7 % 4 == 3, "do I understand cpp modulus?");
+static_assert(7 % -4 == 3, "do I understand cpp modulus?");
+static_assert(-7 % 4 == -3, "do I understand cpp modulus?");
+static_assert(-7 % -4 == -3, "do I understand cpp modulus?");
 
 static_assert(RationalNumber{3, 4} + RationalNumber{5, 6} ==
                   RationalNumber{19, 12},
@@ -159,13 +180,26 @@ static_assert(RationalNumber{-1, -2} > RationalNumber{-1, -3},
 static_assert(RationalNumber{2, 3} > RationalNumber{1, 4},
               "rational number comparison error");
 
-static_assert(RationalNumber{2, 3} >= RationalNumber{2, 3},
+static_assert(RationalNumber{-2, 3} > -1, "rational number comparison error");
+
+static_assert(RationalNumber{-2, 3} < 0, "rational number comparison error");
+
+static_assert(RationalNumber{2, -3} < 0, "rational number comparison error");
+
+static_assert(RationalNumber{-2, -3} > 0, "rational number comparison error");
+
+static_assert(RationalNumber{2, 3} > RationalNumber{1, 4},
               "rational number comparison error");
 
 static_assert(round(RationalNumber{19, 12}) == 2,
               "rational number round error");
 
 static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
+
+static_assert(round(RationalNumber{-3, 7}) == 0, "rational number round error");
+
+static_assert(round(RationalNumber{-4, 7}) == -1,
+              "rational number round error");
 
 enum class JumpState { grounded, started, released };
 
@@ -379,12 +413,12 @@ public:
 
   [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.numerator > 0;
+    return round(a.vertical) > 0;
   }
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.numerator < 0;
+    return round(a.vertical) < 0;
   }
 };
 
@@ -420,12 +454,12 @@ public:
 
   [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.numerator > 0;
+    return round(a.vertical) > 0;
   }
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return a.vertical.numerator < 0;
+    return round(a.vertical) < 0;
   }
 };
 
@@ -433,11 +467,6 @@ static auto playerPassesThrough(Rectangle playerRectangle,
                                 Rectangle wallRectangle,
                                 Velocity playerVelocity,
                                 const Collision &collision) -> bool {
-  const auto distancePlayerWillBeThroughWall{
-      collision.distanceFirstExceedsSecondNormalToSurface(
-          collision.applyVelocityNormalToSurface(playerRectangle,
-                                                 playerVelocity),
-          wallRectangle)};
   const auto playerDoesNotExceedWallsUpperBoundary =
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
           wallRectangle, playerRectangle));
@@ -451,12 +480,13 @@ static auto playerPassesThrough(Rectangle playerRectangle,
                                                    playerVelocity),
           wallRectangle)) &&
       playerDoesNotExceedWallsUpperBoundary &&
-      -collision.combinedVelocity(playerVelocity) <
-          RationalNumber{
-              distancePlayerWillBeThroughWall,
-              collision.distanceFirstExceedsSecondParallelToSurface(
-                  wallRectangle, collision.applyVelocityParallelToSurface(
-                                     playerRectangle, -playerVelocity))}};
+      collision.combinedVelocity(playerVelocity) >
+          RationalNumber{-(collision.distanceFirstExceedsSecondNormalToSurface(
+                               playerRectangle, wallRectangle) +
+                           1),
+                         collision.distanceFirstExceedsSecondParallelToSurface(
+                             wallRectangle, playerRectangle) +
+                             1}};
   const auto playerPassesThroughWallTowardLowerBoundary{
       collision.headingTowardLowerBoundary(playerVelocity) &&
       isNonnegative(collision.distanceFirstExceedsSecondParallelToSurface(
@@ -464,11 +494,12 @@ static auto playerPassesThrough(Rectangle playerRectangle,
                              playerRectangle, playerVelocity))) &&
       playerDoesNotPrecedeWallsLowerBoundary &&
       collision.combinedVelocity(playerVelocity) <
-          RationalNumber{distancePlayerWillBeThroughWall,
+          RationalNumber{collision.distanceFirstExceedsSecondNormalToSurface(
+                             playerRectangle, wallRectangle) +
+                             1,
                          collision.distanceFirstExceedsSecondParallelToSurface(
-                             collision.applyVelocityParallelToSurface(
-                                 playerRectangle, playerVelocity),
-                             wallRectangle)}};
+                             playerRectangle, wallRectangle) +
+                             1}};
   const auto playerPassesThroughWallDirectly{
       !collision.headingTowardUpperBoundary(playerVelocity) &&
       !collision.headingTowardLowerBoundary(playerVelocity) &&
@@ -619,9 +650,9 @@ static auto run(const std::string &playerImagePath,
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
-  const RationalNumber playerJumpAcceleration{-8, 1};
+  const RationalNumber playerJumpAcceleration{-5, 1};
   const auto playerRunAcceleration{2};
-  Rectangle blockRectangle{Point{256, 144}, 15, 15};
+  Rectangle blockRectangle{Point{256, 144}, 40, 40};
   Rectangle backgroundSourceRect{Point{0, 0}, cameraWidth, cameraHeight};
   while (playing) {
     SDL_Event event;
@@ -745,6 +776,9 @@ static auto run(const std::string &playerImagePath,
     SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
                      &backgroundSourceRectConverted, &backgroundProjection, 0,
                      nullptr, SDL_FLIP_NONE);
+    SDL_SetRenderDrawColor(rendererWrapper.renderer, 0x00, 0x00, 0x00, 0xFF);
+    const auto wallProjection{toSDLRect(blockRectangle * pixelScale)};
+    SDL_RenderFillRect(rendererWrapper.renderer, &wallProjection);
     const auto playerProjection{toSDLRect(playerRectangle * pixelScale)};
     SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
                      &playerSourceRect, &playerProjection, 0, nullptr,
