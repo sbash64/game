@@ -693,34 +693,35 @@ static void applyVerticalForces(Velocity &playerVelocity,
 }
 
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
+                    const sdl_wrappers::Texture &textureWrapper,
+                    const Rectangle &sourceRectangle, int pixelScale,
+                    const Rectangle &destinationRectangle) {
+  const auto projection{toSDLRect(destinationRectangle * pixelScale)};
+  const auto sourceSDLRect{toSDLRect(sourceRectangle)};
+  SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
+                   &sourceSDLRect, &projection, 0, nullptr, SDL_FLIP_NONE);
+}
+
+static void present(const sdl_wrappers::Renderer &rendererWrapper,
                     const sdl_wrappers::Texture &playerTextureWrapper,
                     const sdl_wrappers::Texture &backgroundTextureWrapper,
                     const sdl_wrappers::Texture &enemyTextureWrapper,
-                    const SDL_Rect &playerSourceRect,
+                    const Rectangle &playerSourceRectangle,
                     const Rectangle &playerRectangle,
                     const Rectangle &backgroundSourceRectangle,
-                    const SDL_Rect &enemySourceRect,
+                    const Rectangle &enemySourceRectangle,
                     const Rectangle &enemyRectangle, int cameraWidth,
                     int cameraHeight, int pixelScale) {
-  const auto backgroundSourceRectConverted{
-      toSDLRect(backgroundSourceRectangle)};
-  const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
-  const auto backgroundProjection{toSDLRect(backgroundRectangle * pixelScale)};
-  SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
-                   &backgroundSourceRectConverted, &backgroundProjection, 0,
-                   nullptr, SDL_FLIP_NONE);
+  present(rendererWrapper, backgroundTextureWrapper, backgroundSourceRectangle,
+          pixelScale, {Point{0, 0}, cameraWidth, cameraHeight});
   auto enemyPreProjection{enemyRectangle};
   enemyPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
-  const auto enemyProjection{toSDLRect(enemyPreProjection * pixelScale)};
-  SDL_RenderCopyEx(rendererWrapper.renderer, enemyTextureWrapper.texture,
-                   &enemySourceRect, &enemyProjection, 0, nullptr,
-                   SDL_FLIP_NONE);
+  present(rendererWrapper, enemyTextureWrapper, enemySourceRectangle,
+          pixelScale, enemyPreProjection);
   auto playerPreProjection{playerRectangle};
   playerPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
-  const auto playerProjection{toSDLRect(playerPreProjection * pixelScale)};
-  SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
-                   &playerSourceRect, &playerProjection, 0, nullptr,
-                   SDL_FLIP_NONE);
+  present(rendererWrapper, playerTextureWrapper, playerSourceRectangle,
+          pixelScale, playerPreProjection);
   SDL_RenderPresent(rendererWrapper.renderer);
 }
 
@@ -748,7 +749,7 @@ static auto run(const std::string &playerImagePath,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));
   const auto playerWidth{16};
   const auto playerHeight{16};
-  const SDL_Rect playerSourceRect{1, 9, playerWidth, playerHeight};
+  const Rectangle playerSourceRect{Point{1, 9}, playerWidth, playerHeight};
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
   sdl_wrappers::ImageSurface enemyImageSurfaceWrapper{enemyImagePath};
@@ -756,7 +757,7 @@ static auto run(const std::string &playerImagePath,
                   getpixel(enemyImageSurfaceWrapper.surface, 1, 28));
   const auto enemyWidth{16};
   const auto enemyHeight{16};
-  const SDL_Rect enemySourceRect{1, 28, enemyWidth, enemyHeight};
+  const Rectangle enemySourceRect{Point{1, 28}, enemyWidth, enemyHeight};
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
   sdl_wrappers::Texture backgroundTextureWrapper{
