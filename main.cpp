@@ -285,7 +285,7 @@ constexpr auto withFriction(int velocity, int friction) -> int {
 
 constexpr auto isNonnegative(int a) -> bool { return a >= 0; }
 
-class Collision {
+class CollisionDirection {
 public:
   [[nodiscard]] virtual auto distanceSubjectPenetratesObject(Rectangle a,
                                                              Rectangle b) const
@@ -381,7 +381,7 @@ public:
   }
 };
 
-class CollisionFromBelow : public Collision {
+class CollisionFromBelow : public CollisionDirection {
 public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
@@ -392,7 +392,7 @@ public:
   }
 };
 
-class CollisionFromAbove : public Collision {
+class CollisionFromAbove : public CollisionDirection {
 public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
@@ -403,7 +403,7 @@ public:
   }
 };
 
-class CollisionFromRight : public Collision {
+class CollisionFromRight : public CollisionDirection {
 public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
@@ -414,7 +414,7 @@ public:
   }
 };
 
-class CollisionFromLeft : public Collision {
+class CollisionFromLeft : public CollisionDirection {
 public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
@@ -426,7 +426,8 @@ public:
 };
 
 static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
-                          Velocity subjectVelocity, const Collision &collision,
+                          Velocity subjectVelocity,
+                          const CollisionDirection &direction,
                           const CollisionAxis &axis) -> bool {
   const auto subjectDoesNotExceedObjectsUpperBoundary =
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
@@ -442,7 +443,7 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
           objectRectangle)) &&
       subjectDoesNotExceedObjectsUpperBoundary &&
       axis.surfaceRelativeSlope(subjectVelocity) >
-          RationalNumber{-(collision.distanceSubjectPenetratesObject(
+          RationalNumber{-(direction.distanceSubjectPenetratesObject(
                                subjectRectangle, objectRectangle) +
                            1),
                          axis.distanceFirstExceedsSecondParallelToSurface(
@@ -455,7 +456,7 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
                                subjectRectangle, subjectVelocity))) &&
       subjectDoesNotPrecedeObjectsLowerBoundary &&
       axis.surfaceRelativeSlope(subjectVelocity) <
-          RationalNumber{collision.distanceSubjectPenetratesObject(
+          RationalNumber{direction.distanceSubjectPenetratesObject(
                              subjectRectangle, objectRectangle) +
                              1,
                          axis.distanceFirstExceedsSecondParallelToSurface(
@@ -579,7 +580,7 @@ static void handleVerticalCollisions(Rectangle &playerRectangle,
                                      Velocity &playerVelocity,
                                      JumpState &playerJumpState,
                                      const Rectangle &blockRectangle,
-                                     int ground) {
+                                     const Rectangle &floorRectangle) {
   const auto playerIsAboveTopOfBlock =
       distanceFirstExceedsSecondVertically(playerRectangle, blockRectangle) < 0;
   const auto playerIsBelowBottomOfBlock =
@@ -602,10 +603,11 @@ static void handleVerticalCollisions(Rectangle &playerRectangle,
                          CollisionFromAbove{}, VerticalCollision{})) {
     playerVelocity.vertical = {0, 1};
     playerRectangle.origin.y = bottomEdge(blockRectangle) + 1;
-  } else if (bottomEdge(applyVerticalVelocity(playerRectangle,
-                                              playerVelocity)) >= ground)
+  } else if (distanceFirstExceedsSecondVertically(
+                 applyVerticalVelocity(playerRectangle, playerVelocity),
+                 floorRectangle) >= 0)
     onPlayerHitGround(playerVelocity.vertical, playerRectangle, playerJumpState,
-                      ground);
+                      topEdge(floorRectangle));
 }
 
 static void handleHorizontalCollisions(Rectangle &playerRectangle,
@@ -744,16 +746,18 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   const auto ground{cameraHeight - 32};
+  const Rectangle floorRectangle{Point{0, cameraHeight - 32},
+                                 backgroundSourceWidth, 32};
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
   const auto playerJumpAcceleration{-6};
   const auto playerRunAcceleration{2};
-  Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
-                            playerHeight};
+  Rectangle playerRectangle{Point{0, topEdge(floorRectangle) - playerHeight},
+                            playerWidth, playerHeight};
   Velocity playerVelocity{{0, 1}, 0};
   auto playerJumpState{JumpState::grounded};
-  Rectangle blockRectangle{Point{256, 144}, 15, 15};
+  const Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
   auto playing{true};
   while (playing) {
@@ -763,7 +767,7 @@ static auto run(const std::string &playerImagePath,
     applyVerticalForces(playerVelocity, playerJumpState, playerJumpAcceleration,
                         gravity);
     handleVerticalCollisions(playerRectangle, playerVelocity, playerJumpState,
-                             blockRectangle, ground);
+                             blockRectangle, floorRectangle);
     handleHorizontalCollisions(playerRectangle, playerVelocity, blockRectangle);
     playerRectangle = applyVerticalVelocity(
         applyHorizontalVelocity(playerRectangle, playerVelocity),
