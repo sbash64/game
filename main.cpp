@@ -777,6 +777,7 @@ static auto run(const std::string &playerImagePath,
       Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
                 playerHeight},
       Velocity{{0, 1}, 0}, JumpState::grounded};
+  const auto enemyHorizontalVelocity{1};
   Rectangle enemyRectangle{Point{140, topEdge(floorRectangle) - enemyHeight},
                            enemyWidth, enemyHeight};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
@@ -793,6 +794,12 @@ static auto run(const std::string &playerImagePath,
                                 playerJumpAcceleration, gravity),
             blockRectangle, floorRectangle),
         blockRectangle));
+    if (leftEdge(playerState.rectangle) < leftEdge(enemyRectangle))
+      enemyRectangle =
+          shiftHorizontally(enemyRectangle, -enemyHorizontalVelocity);
+    else if (leftEdge(playerState.rectangle) > leftEdge(enemyRectangle))
+      enemyRectangle =
+          shiftHorizontally(enemyRectangle, enemyHorizontalVelocity);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.rectangle, cameraWidth);
