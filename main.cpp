@@ -383,7 +383,7 @@ public:
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
-    return RationalNumber{round(a.vertical), a.horizontal};
+    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
   }
 };
 
@@ -399,7 +399,7 @@ public:
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
-    return RationalNumber{-round(a.vertical), a.horizontal};
+    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
   }
 };
 
@@ -431,7 +431,7 @@ public:
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
       -> RationalNumber override {
-    return RationalNumber{-a.horizontal, round(a.vertical)};
+    return RationalNumber{std::abs(a.horizontal), round(a.vertical)};
   }
 };
 
