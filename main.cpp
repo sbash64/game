@@ -471,14 +471,13 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
           objectRectangle, subjectRectangle)))
     return subjectPassesThroughObjectTowardLowerBoundary(
         subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
-  return subjectPassesThroughObjectTowardLowerBoundary(
-             subjectRectangle, objectRectangle, subjectVelocity, direction,
-             axis) ||
-         subjectPassesThroughObjectTowardUpperBoundary(
-             subjectRectangle, objectRectangle, subjectVelocity, direction,
-             axis) ||
-         (!axis.headingTowardUpperBoundary(subjectVelocity) &&
-          !axis.headingTowardLowerBoundary(subjectVelocity));
+  if (axis.headingTowardUpperBoundary(subjectVelocity))
+    return subjectPassesThroughObjectTowardUpperBoundary(
+        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
+  if (axis.headingTowardLowerBoundary(subjectVelocity))
+    return subjectPassesThroughObjectTowardLowerBoundary(
+        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
+  return true;
 }
 
 static auto onPlayerHitGround(PlayerState playerState, int ground)
