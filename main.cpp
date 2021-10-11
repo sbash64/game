@@ -416,6 +416,12 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
                           Velocity subjectVelocity,
                           const CollisionDirection &direction,
                           const CollisionAxis &axis) -> bool {
+  if (isNonnegative(direction.distanceSubjectPenetratesObject(
+          subjectRectangle, objectRectangle)) ||
+      direction.distanceSubjectPenetratesObject(
+          axis.applyVelocityNormalToSurface(subjectRectangle, subjectVelocity),
+          objectRectangle) < 0)
+    return false;
   const auto subjectDoesNotExceedObjectsUpperBoundary =
       isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
           objectRectangle, subjectRectangle));
@@ -471,26 +477,10 @@ static auto handleVerticalCollisions(PlayerState playerState,
                                      const Rectangle &blockRectangle,
                                      const Rectangle &floorRectangle)
     -> PlayerState {
-  const auto playerIsAboveTopOfBlock =
-      distanceFirstExceedsSecondVertically(playerState.rectangle,
-                                           blockRectangle) < 0;
-  const auto playerIsBelowBottomOfBlock =
-      distanceFirstExceedsSecondVertically(blockRectangle,
-                                           playerState.rectangle) < 0;
-  const auto playerWillBeBelowTopOfBlock =
-      isNonnegative(distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
-          blockRectangle));
-  const auto playerWillBeAboveBottomOfBlock =
-      isNonnegative(distanceFirstExceedsSecondVertically(
-          blockRectangle,
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity)));
-  if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromBelow{}, VerticalCollision{}))
     return onPlayerHitGround(playerState, topEdge(blockRectangle));
-  if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromAbove{}, VerticalCollision{})) {
     playerState.velocity.vertical = {0, 1};
     playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
@@ -506,28 +496,12 @@ static auto handleVerticalCollisions(PlayerState playerState,
 static auto handleHorizontalCollisions(PlayerState playerState,
                                        const Rectangle &blockRectangle)
     -> PlayerState {
-  const auto playerIsBeforeLeftOfBlock =
-      distanceFirstExceedsSecondHorizontally(playerState.rectangle,
-                                             blockRectangle) < 0;
-  const auto playerIsAfterRightOfBlock =
-      distanceFirstExceedsSecondHorizontally(blockRectangle,
-                                             playerState.rectangle) < 0;
-  const auto playerWillBeAheadOfLeftOfBlock =
-      isNonnegative(distanceFirstExceedsSecondHorizontally(
-          applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
-          blockRectangle));
-  const auto playerWillBeBeforeRightOfBlock =
-      isNonnegative(distanceFirstExceedsSecondHorizontally(
-          blockRectangle, applyHorizontalVelocity(playerState.rectangle,
-                                                  playerState.velocity)));
-  if (playerIsBeforeLeftOfBlock && playerWillBeAheadOfLeftOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromRight{}, HorizontalCollision{})) {
     playerState.velocity.horizontal = 0;
     playerState.rectangle.origin.x =
         leftEdge(blockRectangle) - playerState.rectangle.width;
-  } else if (playerIsAfterRightOfBlock && playerWillBeBeforeRightOfBlock &&
-             passesThrough(playerState.rectangle, blockRectangle,
+  } else if (passesThrough(playerState.rectangle, blockRectangle,
                            playerState.velocity, CollisionFromLeft{},
                            HorizontalCollision{})) {
     playerState.velocity.horizontal = 0;
