@@ -148,6 +148,10 @@ static_assert(RationalNumber{4, 7} + RationalNumber{2, 3} ==
                   RationalNumber{26, 21},
               "rational number arithmetic error");
 
+static_assert(RationalNumber{4, 7} + RationalNumber{-2, 3} ==
+                  RationalNumber{-2, 21},
+              "rational number arithmetic error");
+
 static_assert(RationalNumber{4, 7} + 3 == RationalNumber{25, 7},
               "rational number arithmetic error");
 
@@ -697,6 +701,34 @@ static void applyVerticalForces(Velocity &playerVelocity,
   }
 }
 
+static void present(sdl_wrappers::Renderer &rendererWrapper,
+                    sdl_wrappers::Texture &playerTextureWrapper,
+                    sdl_wrappers::Texture &backgroundTextureWrapper,
+                    const SDL_Rect &playerSourceRect,
+                    const Rectangle &playerRectangle,
+                    const Rectangle &backgroundSourceRectangle) {
+  const auto backgroundSourceRectConverted{
+      toSDLRect(backgroundSourceRectangle)};
+  const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
+  const auto backgroundProjection{toSDLRect(backgroundRectangle * pixelScale)};
+  SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
+                   &backgroundSourceRectConverted, &backgroundProjection, 0,
+                   nullptr, SDL_FLIP_NONE);
+  auto playerPreProjection{playerRectangle};
+  playerPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
+  const auto playerProjection{toSDLRect(playerPreProjection * pixelScale)};
+  SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
+                   &playerSourceRect, &playerProjection, 0, nullptr,
+                   SDL_FLIP_NONE);
+  SDL_RenderPresent(rendererWrapper.renderer);
+}
+
+static void flushEvents(bool &playing) {
+  SDL_Event event;
+  while (SDL_PollEvent(&event) != 0)
+    playing = event.type != SDL_QUIT;
+}
+
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
@@ -716,7 +748,6 @@ static auto run(const std::string &playerImagePath,
                                              playerImageSurfaceWrapper.surface};
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
-  auto playing{true};
   const auto ground{cameraHeight - 32};
   Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
                             playerHeight};
@@ -729,41 +760,23 @@ static auto run(const std::string &playerImagePath,
   const auto playerRunAcceleration{2};
   Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
+  auto playing{true};
   while (playing) {
-    SDL_Event event;
-    while (SDL_PollEvent(&event) != 0)
-      playing = event.type != SDL_QUIT;
+    flushEvents(playing);
     applyHorizontalForces(playerVelocity, groundFriction,
                           playerMaxHorizontalSpeed, playerRunAcceleration);
     applyVerticalForces(playerVelocity, playerJumpState, playerJumpAcceleration,
                         gravity);
-
     handleVerticalCollisions(playerRectangle, playerVelocity, playerJumpState,
                              blockRectangle, ground);
     handleHorizontalCollisions(playerRectangle, playerVelocity, blockRectangle);
-
     playerRectangle = applyVerticalVelocity(
         applyHorizontalVelocity(playerRectangle, playerVelocity),
         playerVelocity);
-
     shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                     playerRectangle);
-
-    const auto backgroundSourceRectConverted{
-        toSDLRect(backgroundSourceRectangle)};
-    const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
-    const auto backgroundProjection{
-        toSDLRect(backgroundRectangle * pixelScale)};
-    SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
-                     &backgroundSourceRectConverted, &backgroundProjection, 0,
-                     nullptr, SDL_FLIP_NONE);
-    auto playerPreProjection{playerRectangle};
-    playerPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
-    const auto playerProjection{toSDLRect(playerPreProjection * pixelScale)};
-    SDL_RenderCopyEx(rendererWrapper.renderer, playerTextureWrapper.texture,
-                     &playerSourceRect, &playerProjection, 0, nullptr,
-                     SDL_FLIP_NONE);
-    SDL_RenderPresent(rendererWrapper.renderer);
+    present(rendererWrapper, playerTextureWrapper, backgroundTextureWrapper,
+            playerSourceRect, playerRectangle, backgroundSourceRectangle);
   }
   return EXIT_SUCCESS;
 }
