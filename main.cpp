@@ -745,7 +745,6 @@ static auto run(const std::string &playerImagePath,
                                              playerImageSurfaceWrapper.surface};
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
-  const auto ground{cameraHeight - 32};
   const Rectangle floorRectangle{Point{0, cameraHeight - 32},
                                  backgroundSourceWidth, 32};
   const RationalNumber gravity{1, 4};
