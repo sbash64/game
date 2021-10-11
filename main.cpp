@@ -717,6 +717,15 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
   return playerState;
 }
 
+static auto moveTowardPlayer(Rectangle subject, int horizontalVelocity,
+                             const PlayerState &playerState) -> Rectangle {
+  if (leftEdge(playerState.rectangle) < leftEdge(subject))
+    return shiftHorizontally(subject, -horizontalVelocity);
+  if (leftEdge(playerState.rectangle) > leftEdge(subject))
+    return shiftHorizontally(subject, horizontalVelocity);
+  return subject;
+}
+
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
                     const sdl_wrappers::Texture &textureWrapper,
                     const Rectangle &sourceRectangle, int pixelScale,
@@ -794,12 +803,8 @@ static auto run(const std::string &playerImagePath,
                                 playerJumpAcceleration, gravity),
             blockRectangle, floorRectangle),
         blockRectangle));
-    if (leftEdge(playerState.rectangle) < leftEdge(enemyRectangle))
-      enemyRectangle =
-          shiftHorizontally(enemyRectangle, -enemyHorizontalVelocity);
-    else if (leftEdge(playerState.rectangle) > leftEdge(enemyRectangle))
-      enemyRectangle =
-          shiftHorizontally(enemyRectangle, enemyHorizontalVelocity);
+    enemyRectangle =
+        moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.rectangle, cameraWidth);
