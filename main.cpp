@@ -290,8 +290,6 @@ public:
   [[nodiscard]] virtual auto distanceSubjectPenetratesObject(Rectangle a,
                                                              Rectangle b) const
       -> int = 0;
-  [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber = 0;
 };
 
 class CollisionAxis {
@@ -309,6 +307,8 @@ public:
       -> bool = 0;
   [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
       -> bool = 0;
+  [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity a) const
+      -> RationalNumber = 0;
 };
 
 class HorizontalCollision : public CollisionAxis {
@@ -338,6 +338,11 @@ public:
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
     return round(a.vertical) < 0;
+  }
+
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
+      -> RationalNumber override {
+    return RationalNumber{std::abs(a.horizontal), round(a.vertical)};
   }
 };
 
@@ -369,6 +374,11 @@ public:
       -> bool override {
     return a.horizontal < 0;
   }
+
+  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
+      -> RationalNumber override {
+    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
+  }
 };
 
 class CollisionFromBelow : public Collision {
@@ -379,11 +389,6 @@ public:
       -> int override {
     return distanceFirstExceedsSecondVertically(subjectRectangle,
                                                 objectRectangle);
-  }
-
-  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
   }
 };
 
@@ -396,11 +401,6 @@ public:
     return distanceFirstExceedsSecondVertically(objectRectangle,
                                                 subjectRectangle);
   }
-
-  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
-  }
 };
 
 class CollisionFromRight : public Collision {
@@ -412,11 +412,6 @@ public:
     return distanceFirstExceedsSecondHorizontally(subjectRectangle,
                                                   objectRectangle);
   }
-
-  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{a.horizontal, round(a.vertical)};
-  }
 };
 
 class CollisionFromLeft : public Collision {
@@ -427,11 +422,6 @@ public:
       -> int override {
     return distanceFirstExceedsSecondHorizontally(objectRectangle,
                                                   subjectRectangle);
-  }
-
-  [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{std::abs(a.horizontal), round(a.vertical)};
   }
 };
 
@@ -451,7 +441,7 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
                                               subjectVelocity),
           objectRectangle)) &&
       subjectDoesNotExceedObjectsUpperBoundary &&
-      collision.surfaceRelativeSlope(subjectVelocity) >
+      axis.surfaceRelativeSlope(subjectVelocity) >
           RationalNumber{-(collision.distanceSubjectPenetratesObject(
                                subjectRectangle, objectRectangle) +
                            1),
@@ -464,7 +454,7 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
           objectRectangle, axis.applyVelocityParallelToSurface(
                                subjectRectangle, subjectVelocity))) &&
       subjectDoesNotPrecedeObjectsLowerBoundary &&
-      collision.surfaceRelativeSlope(subjectVelocity) <
+      axis.surfaceRelativeSlope(subjectVelocity) <
           RationalNumber{collision.distanceSubjectPenetratesObject(
                              subjectRectangle, objectRectangle) +
                              1,
