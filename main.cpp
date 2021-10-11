@@ -231,9 +231,13 @@ constexpr auto operator-(Velocity a) -> Velocity {
   return {-a.vertical, -a.horizontal};
 }
 
-constexpr auto applyHorizontalVelocity(Rectangle a, Velocity b) -> Rectangle {
-  a.origin.x += b.horizontal;
+constexpr auto shiftHorizontally(Rectangle a, int b) -> Rectangle {
+  a.origin.x += b;
   return a;
+}
+
+constexpr auto applyHorizontalVelocity(Rectangle a, Velocity b) -> Rectangle {
+  return shiftHorizontally(a, b.horizontal);
 }
 
 constexpr auto applyVerticalVelocity(Rectangle a, Velocity b) -> Rectangle {
@@ -640,9 +644,10 @@ static void handleHorizontalCollisions(Rectangle &playerRectangle,
   }
 }
 
-static void shiftBackground(Rectangle &backgroundSourceRectangle,
+static auto shiftBackground(Rectangle backgroundSourceRectangle,
                             int backgroundSourceWidth,
-                            const Rectangle &playerRectangle, int cameraWidth) {
+                            const Rectangle &playerRectangle, int cameraWidth)
+    -> Rectangle {
   const auto playerDistanceRightOfCameraCenter{
       leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
       leftEdge(backgroundSourceRectangle)};
@@ -650,14 +655,15 @@ static void shiftBackground(Rectangle &backgroundSourceRectangle,
       backgroundSourceWidth - rightEdge(backgroundSourceRectangle) - 1};
   if (playerDistanceRightOfCameraCenter > 0 &&
       distanceFromBackgroundRightEdgeToEnd > 0)
-    backgroundSourceRectangle.origin.x +=
-        std::min(distanceFromBackgroundRightEdgeToEnd,
-                 playerDistanceRightOfCameraCenter);
-  else if (playerDistanceRightOfCameraCenter < 0 &&
-           leftEdge(backgroundSourceRectangle) > 0)
-    backgroundSourceRectangle.origin.x +=
-        std::max(-leftEdge(backgroundSourceRectangle),
-                 playerDistanceRightOfCameraCenter);
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::min(distanceFromBackgroundRightEdgeToEnd,
+                                      playerDistanceRightOfCameraCenter));
+  if (playerDistanceRightOfCameraCenter < 0 &&
+      leftEdge(backgroundSourceRectangle) > 0)
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::max(-leftEdge(backgroundSourceRectangle),
+                                      playerDistanceRightOfCameraCenter));
+  return backgroundSourceRectangle;
 }
 
 static void applyHorizontalForces(Velocity &playerVelocity, int groundFriction,
@@ -714,14 +720,12 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
                     int cameraHeight, int pixelScale) {
   present(rendererWrapper, backgroundTextureWrapper, backgroundSourceRectangle,
           pixelScale, {Point{0, 0}, cameraWidth, cameraHeight});
-  auto enemyPreProjection{enemyRectangle};
-  enemyPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
-  present(rendererWrapper, enemyTextureWrapper, enemySourceRectangle,
-          pixelScale, enemyPreProjection);
-  auto playerPreProjection{playerRectangle};
-  playerPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
-  present(rendererWrapper, playerTextureWrapper, playerSourceRectangle,
-          pixelScale, playerPreProjection);
+  present(
+      rendererWrapper, enemyTextureWrapper, enemySourceRectangle, pixelScale,
+      shiftHorizontally(enemyRectangle, -leftEdge(backgroundSourceRectangle)));
+  present(
+      rendererWrapper, playerTextureWrapper, playerSourceRectangle, pixelScale,
+      shiftHorizontally(playerRectangle, -leftEdge(backgroundSourceRectangle)));
   SDL_RenderPresent(rendererWrapper.renderer);
 }
 
@@ -792,8 +796,9 @@ static auto run(const std::string &playerImagePath,
     playerRectangle = applyVerticalVelocity(
         applyHorizontalVelocity(playerRectangle, playerVelocity),
         playerVelocity);
-    shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
-                    playerRectangle, cameraWidth);
+    backgroundSourceRectangle =
+        shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
+                        playerRectangle, cameraWidth);
     present(rendererWrapper, playerTextureWrapper, backgroundTextureWrapper,
             enemyTextureWrapper, playerSourceRect, playerRectangle,
             backgroundSourceRectangle, enemySourceRect, enemyRectangle,
