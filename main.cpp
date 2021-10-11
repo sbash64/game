@@ -227,6 +227,12 @@ struct Velocity {
   int horizontal;
 };
 
+struct PlayerState {
+  Rectangle rectangle;
+  Velocity velocity;
+  JumpState jumpState;
+};
+
 constexpr auto operator-(Velocity a) -> Velocity {
   return {-a.vertical, -a.horizontal};
 }
@@ -476,12 +482,12 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
          subjectPassesThroughObjectDirectly;
 }
 
-static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
-                              Rectangle &playerRectangle,
-                              JumpState &playerJumpState, int ground) {
-  playerVerticalVelocity = {0, 1};
-  playerRectangle.origin.y = ground - playerRectangle.height;
-  playerJumpState = JumpState::grounded;
+static auto onPlayerHitGround(PlayerState playerState, int ground)
+    -> PlayerState {
+  playerState.velocity.vertical = {0, 1};
+  playerState.rectangle.origin.y = ground - playerState.rectangle.height;
+  playerState.jumpState = JumpState::grounded;
+  return playerState;
 }
 
 [[noreturn]] static void throwRuntimeError(std::string_view message) {
@@ -580,68 +586,73 @@ static void initializeSDLImage() {
   }
 }
 
-static void handleVerticalCollisions(Rectangle &playerRectangle,
-                                     Velocity &playerVelocity,
-                                     JumpState &playerJumpState,
+static auto handleVerticalCollisions(PlayerState playerState,
                                      const Rectangle &blockRectangle,
-                                     const Rectangle &floorRectangle) {
+                                     const Rectangle &floorRectangle)
+    -> PlayerState {
   const auto playerIsAboveTopOfBlock =
-      distanceFirstExceedsSecondVertically(playerRectangle, blockRectangle) < 0;
+      distanceFirstExceedsSecondVertically(playerState.rectangle,
+                                           blockRectangle) < 0;
   const auto playerIsBelowBottomOfBlock =
-      distanceFirstExceedsSecondVertically(blockRectangle, playerRectangle) < 0;
+      distanceFirstExceedsSecondVertically(blockRectangle,
+                                           playerState.rectangle) < 0;
   const auto playerWillBeBelowTopOfBlock =
       isNonnegative(distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerRectangle, playerVelocity),
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
           blockRectangle));
   const auto playerWillBeAboveBottomOfBlock =
       isNonnegative(distanceFirstExceedsSecondVertically(
           blockRectangle,
-          applyVerticalVelocity(playerRectangle, playerVelocity)));
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity)));
   if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
-      passesThrough(playerRectangle, blockRectangle, playerVelocity,
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromBelow{}, VerticalCollision{}))
-    onPlayerHitGround(playerVelocity.vertical, playerRectangle, playerJumpState,
-                      topEdge(blockRectangle));
+    playerState = onPlayerHitGround(playerState, topEdge(blockRectangle));
   else if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
-           passesThrough(playerRectangle, blockRectangle, playerVelocity,
-                         CollisionFromAbove{}, VerticalCollision{})) {
-    playerVelocity.vertical = {0, 1};
-    playerRectangle.origin.y = bottomEdge(blockRectangle) + 1;
+           passesThrough(playerState.rectangle, blockRectangle,
+                         playerState.velocity, CollisionFromAbove{},
+                         VerticalCollision{})) {
+    playerState.velocity.vertical = {0, 1};
+    playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
   } else if (distanceFirstExceedsSecondVertically(
-                 applyVerticalVelocity(playerRectangle, playerVelocity),
+                 applyVerticalVelocity(playerState.rectangle,
+                                       playerState.velocity),
                  floorRectangle) >= 0)
-    onPlayerHitGround(playerVelocity.vertical, playerRectangle, playerJumpState,
-                      topEdge(floorRectangle));
+    playerState = onPlayerHitGround(playerState, topEdge(floorRectangle));
+  return playerState;
 }
 
-static void handleHorizontalCollisions(Rectangle &playerRectangle,
-                                       Velocity &playerVelocity,
-                                       const Rectangle &blockRectangle) {
+static auto handleHorizontalCollisions(PlayerState playerState,
+                                       const Rectangle &blockRectangle)
+    -> PlayerState {
   const auto playerIsBeforeLeftOfBlock =
-      distanceFirstExceedsSecondHorizontally(playerRectangle, blockRectangle) <
-      0;
+      distanceFirstExceedsSecondHorizontally(playerState.rectangle,
+                                             blockRectangle) < 0;
   const auto playerIsAfterRightOfBlock =
-      distanceFirstExceedsSecondHorizontally(blockRectangle, playerRectangle) <
-      0;
+      distanceFirstExceedsSecondHorizontally(blockRectangle,
+                                             playerState.rectangle) < 0;
   const auto playerWillBeAheadOfLeftOfBlock =
       isNonnegative(distanceFirstExceedsSecondHorizontally(
-          applyHorizontalVelocity(playerRectangle, playerVelocity),
+          applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
           blockRectangle));
   const auto playerWillBeBeforeRightOfBlock =
       isNonnegative(distanceFirstExceedsSecondHorizontally(
-          blockRectangle,
-          applyHorizontalVelocity(playerRectangle, playerVelocity)));
+          blockRectangle, applyHorizontalVelocity(playerState.rectangle,
+                                                  playerState.velocity)));
   if (playerIsBeforeLeftOfBlock && playerWillBeAheadOfLeftOfBlock &&
-      passesThrough(playerRectangle, blockRectangle, playerVelocity,
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromRight{}, HorizontalCollision{})) {
-    playerVelocity.horizontal = 0;
-    playerRectangle.origin.x = leftEdge(blockRectangle) - playerRectangle.width;
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x =
+        leftEdge(blockRectangle) - playerState.rectangle.width;
   } else if (playerIsAfterRightOfBlock && playerWillBeBeforeRightOfBlock &&
-             passesThrough(playerRectangle, blockRectangle, playerVelocity,
-                           CollisionFromLeft{}, HorizontalCollision{})) {
-    playerVelocity.horizontal = 0;
-    playerRectangle.origin.x = rightEdge(blockRectangle) + 1;
+             passesThrough(playerState.rectangle, blockRectangle,
+                           playerState.velocity, CollisionFromLeft{},
+                           HorizontalCollision{})) {
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x = rightEdge(blockRectangle) + 1;
   }
+  return playerState;
 }
 
 static auto shiftBackground(Rectangle backgroundSourceRectangle,
@@ -666,36 +677,37 @@ static auto shiftBackground(Rectangle backgroundSourceRectangle,
   return backgroundSourceRectangle;
 }
 
-static void applyHorizontalForces(Velocity &playerVelocity, int groundFriction,
+static auto applyHorizontalForces(PlayerState playerState, int groundFriction,
                                   int playerMaxHorizontalSpeed,
-                                  int playerRunAcceleration) {
+                                  int playerRunAcceleration) -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_LEFT))
-    playerVelocity.horizontal -= playerRunAcceleration;
+    playerState.velocity.horizontal -= playerRunAcceleration;
   if (pressing(keyStates, SDL_SCANCODE_RIGHT))
-    playerVelocity.horizontal += playerRunAcceleration;
-  playerVelocity.horizontal =
-      withFriction(clamp(playerVelocity.horizontal, playerMaxHorizontalSpeed),
-                   groundFriction);
+    playerState.velocity.horizontal += playerRunAcceleration;
+  playerState.velocity.horizontal = withFriction(
+      clamp(playerState.velocity.horizontal, playerMaxHorizontalSpeed),
+      groundFriction);
+  return playerState;
 }
 
-static void applyVerticalForces(Velocity &playerVelocity,
-                                JumpState &playerJumpState,
+static auto applyVerticalForces(PlayerState playerState,
                                 int playerJumpAcceleration,
-                                RationalNumber gravity) {
+                                RationalNumber gravity) -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_UP) &&
-      playerJumpState == JumpState::grounded) {
-    playerJumpState = JumpState::started;
-    playerVelocity.vertical += playerJumpAcceleration;
+      playerState.jumpState == JumpState::grounded) {
+    playerState.jumpState = JumpState::started;
+    playerState.velocity.vertical += playerJumpAcceleration;
   }
-  playerVelocity.vertical += gravity;
+  playerState.velocity.vertical += gravity;
   if (!pressing(keyStates, SDL_SCANCODE_UP) &&
-      playerJumpState == JumpState::started) {
-    playerJumpState = JumpState::released;
-    if (playerVelocity.vertical < 0)
-      playerVelocity.vertical = {0, 1};
+      playerState.jumpState == JumpState::started) {
+    playerState.jumpState = JumpState::released;
+    if (playerState.velocity.vertical < 0)
+      playerState.velocity.vertical = {0, 1};
   }
+  return playerState;
 }
 
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
@@ -706,27 +718,6 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
   const auto sourceSDLRect{toSDLRect(sourceRectangle)};
   SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
                    &sourceSDLRect, &projection, 0, nullptr, SDL_FLIP_NONE);
-}
-
-static void present(const sdl_wrappers::Renderer &rendererWrapper,
-                    const sdl_wrappers::Texture &playerTextureWrapper,
-                    const sdl_wrappers::Texture &backgroundTextureWrapper,
-                    const sdl_wrappers::Texture &enemyTextureWrapper,
-                    const Rectangle &playerSourceRectangle,
-                    const Rectangle &playerRectangle,
-                    const Rectangle &backgroundSourceRectangle,
-                    const Rectangle &enemySourceRectangle,
-                    const Rectangle &enemyRectangle, int cameraWidth,
-                    int cameraHeight, int pixelScale) {
-  present(rendererWrapper, backgroundTextureWrapper, backgroundSourceRectangle,
-          pixelScale, {Point{0, 0}, cameraWidth, cameraHeight});
-  present(
-      rendererWrapper, enemyTextureWrapper, enemySourceRectangle, pixelScale,
-      shiftHorizontally(enemyRectangle, -leftEdge(backgroundSourceRectangle)));
-  present(
-      rendererWrapper, playerTextureWrapper, playerSourceRectangle, pixelScale,
-      shiftHorizontally(playerRectangle, -leftEdge(backgroundSourceRectangle)));
-  SDL_RenderPresent(rendererWrapper.renderer);
 }
 
 static void flushEvents(bool &playing) {
@@ -775,10 +766,10 @@ static auto run(const std::string &playerImagePath,
   const auto playerMaxHorizontalSpeed{4};
   const auto playerJumpAcceleration{-6};
   const auto playerRunAcceleration{2};
-  Rectangle playerRectangle{Point{0, topEdge(floorRectangle) - playerHeight},
-                            playerWidth, playerHeight};
-  Velocity playerVelocity{{0, 1}, 0};
-  auto playerJumpState{JumpState::grounded};
+  PlayerState playerState{
+      Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
+                playerHeight},
+      Velocity{{0, 1}, 0}, JumpState::grounded};
   Rectangle enemyRectangle{Point{140, topEdge(floorRectangle) - enemyHeight},
                            enemyWidth, enemyHeight};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
@@ -786,23 +777,30 @@ static auto run(const std::string &playerImagePath,
   auto playing{true};
   while (playing) {
     flushEvents(playing);
-    applyHorizontalForces(playerVelocity, groundFriction,
-                          playerMaxHorizontalSpeed, playerRunAcceleration);
-    applyVerticalForces(playerVelocity, playerJumpState, playerJumpAcceleration,
-                        gravity);
-    handleVerticalCollisions(playerRectangle, playerVelocity, playerJumpState,
-                             blockRectangle, floorRectangle);
-    handleHorizontalCollisions(playerRectangle, playerVelocity, blockRectangle);
-    playerRectangle = applyVerticalVelocity(
-        applyHorizontalVelocity(playerRectangle, playerVelocity),
-        playerVelocity);
+    playerState =
+        applyHorizontalForces(playerState, groundFriction,
+                              playerMaxHorizontalSpeed, playerRunAcceleration);
+    playerState =
+        applyVerticalForces(playerState, playerJumpAcceleration, gravity);
+    playerState =
+        handleVerticalCollisions(playerState, blockRectangle, floorRectangle);
+    playerState = handleHorizontalCollisions(playerState, blockRectangle);
+    playerState.rectangle = applyVerticalVelocity(
+        applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
+        playerState.velocity);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
-                        playerRectangle, cameraWidth);
-    present(rendererWrapper, playerTextureWrapper, backgroundTextureWrapper,
-            enemyTextureWrapper, playerSourceRect, playerRectangle,
-            backgroundSourceRectangle, enemySourceRect, enemyRectangle,
-            cameraWidth, cameraHeight, pixelScale);
+                        playerState.rectangle, cameraWidth);
+    present(rendererWrapper, backgroundTextureWrapper,
+            backgroundSourceRectangle, pixelScale,
+            {Point{0, 0}, cameraWidth, cameraHeight});
+    present(rendererWrapper, enemyTextureWrapper, enemySourceRect, pixelScale,
+            shiftHorizontally(enemyRectangle,
+                              -leftEdge(backgroundSourceRectangle)));
+    present(rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
+            shiftHorizontally(playerState.rectangle,
+                              -leftEdge(backgroundSourceRectangle)));
+    SDL_RenderPresent(rendererWrapper.renderer);
   }
   return EXIT_SUCCESS;
 }
