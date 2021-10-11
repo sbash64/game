@@ -607,18 +607,18 @@ static auto handleVerticalCollisions(PlayerState playerState,
   if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
       passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromBelow{}, VerticalCollision{}))
-    playerState = onPlayerHitGround(playerState, topEdge(blockRectangle));
-  else if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
-           passesThrough(playerState.rectangle, blockRectangle,
-                         playerState.velocity, CollisionFromAbove{},
-                         VerticalCollision{})) {
+    return onPlayerHitGround(playerState, topEdge(blockRectangle));
+  if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+                    CollisionFromAbove{}, VerticalCollision{})) {
     playerState.velocity.vertical = {0, 1};
     playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
-  } else if (distanceFirstExceedsSecondVertically(
-                 applyVerticalVelocity(playerState.rectangle,
-                                       playerState.velocity),
-                 floorRectangle) >= 0)
-    playerState = onPlayerHitGround(playerState, topEdge(floorRectangle));
+    return playerState;
+  }
+  if (distanceFirstExceedsSecondVertically(
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
+          floorRectangle) >= 0)
+    return onPlayerHitGround(playerState, topEdge(floorRectangle));
   return playerState;
 }
 
@@ -710,6 +710,13 @@ static auto applyVerticalForces(PlayerState playerState,
   return playerState;
 }
 
+static auto applyVelocity(PlayerState playerState) -> PlayerState {
+  playerState.rectangle = applyVerticalVelocity(
+      applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
+      playerState.velocity);
+  return playerState;
+}
+
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
                     const sdl_wrappers::Texture &textureWrapper,
                     const Rectangle &sourceRectangle, int pixelScale,
@@ -777,17 +784,15 @@ static auto run(const std::string &playerImagePath,
   auto playing{true};
   while (playing) {
     flushEvents(playing);
-    playerState =
-        applyHorizontalForces(playerState, groundFriction,
-                              playerMaxHorizontalSpeed, playerRunAcceleration);
-    playerState =
-        applyVerticalForces(playerState, playerJumpAcceleration, gravity);
-    playerState =
-        handleVerticalCollisions(playerState, blockRectangle, floorRectangle);
-    playerState = handleHorizontalCollisions(playerState, blockRectangle);
-    playerState.rectangle = applyVerticalVelocity(
-        applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
-        playerState.velocity);
+    playerState = applyVelocity(handleHorizontalCollisions(
+        handleVerticalCollisions(
+            applyVerticalForces(applyHorizontalForces(playerState,
+                                                      groundFriction,
+                                                      playerMaxHorizontalSpeed,
+                                                      playerRunAcceleration),
+                                playerJumpAcceleration, gravity),
+            blockRectangle, floorRectangle),
+        blockRectangle));
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.rectangle, cameraWidth);
