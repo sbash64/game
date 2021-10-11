@@ -19,29 +19,6 @@
 #include <string>
 #include <string_view>
 
-// https://stackoverflow.com/a/53067795
-static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
-  const auto bpp{surface->format->BytesPerPixel};
-  const auto *p = static_cast<const Uint8 *>(surface->pixels) +
-                  static_cast<std::ptrdiff_t>(y) * surface->pitch +
-                  static_cast<std::ptrdiff_t>(x) * bpp;
-  switch (bpp) {
-  case 1:
-    return *p;
-  case 2:
-    return *reinterpret_cast<const Uint16 *>(p);
-  case 3:
-    if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
-      return p[0] << 16 | p[1] << 8 | p[2];
-    else
-      return p[0] | p[1] << 8 | p[2] << 16;
-  case 4:
-    return *reinterpret_cast<const Uint32 *>(p);
-  default:
-    return 0;
-  }
-}
-
 namespace sbash64::game {
 struct RationalNumber {
   int numerator;
@@ -490,6 +467,138 @@ static auto onPlayerHitGround(PlayerState playerState, int ground)
   return playerState;
 }
 
+static auto handleVerticalCollisions(PlayerState playerState,
+                                     const Rectangle &blockRectangle,
+                                     const Rectangle &floorRectangle)
+    -> PlayerState {
+  const auto playerIsAboveTopOfBlock =
+      distanceFirstExceedsSecondVertically(playerState.rectangle,
+                                           blockRectangle) < 0;
+  const auto playerIsBelowBottomOfBlock =
+      distanceFirstExceedsSecondVertically(blockRectangle,
+                                           playerState.rectangle) < 0;
+  const auto playerWillBeBelowTopOfBlock =
+      isNonnegative(distanceFirstExceedsSecondVertically(
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
+          blockRectangle));
+  const auto playerWillBeAboveBottomOfBlock =
+      isNonnegative(distanceFirstExceedsSecondVertically(
+          blockRectangle,
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity)));
+  if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+                    CollisionFromBelow{}, VerticalCollision{}))
+    return onPlayerHitGround(playerState, topEdge(blockRectangle));
+  if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+                    CollisionFromAbove{}, VerticalCollision{})) {
+    playerState.velocity.vertical = {0, 1};
+    playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
+    return playerState;
+  }
+  if (distanceFirstExceedsSecondVertically(
+          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
+          floorRectangle) >= 0)
+    return onPlayerHitGround(playerState, topEdge(floorRectangle));
+  return playerState;
+}
+
+static auto handleHorizontalCollisions(PlayerState playerState,
+                                       const Rectangle &blockRectangle)
+    -> PlayerState {
+  const auto playerIsBeforeLeftOfBlock =
+      distanceFirstExceedsSecondHorizontally(playerState.rectangle,
+                                             blockRectangle) < 0;
+  const auto playerIsAfterRightOfBlock =
+      distanceFirstExceedsSecondHorizontally(blockRectangle,
+                                             playerState.rectangle) < 0;
+  const auto playerWillBeAheadOfLeftOfBlock =
+      isNonnegative(distanceFirstExceedsSecondHorizontally(
+          applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
+          blockRectangle));
+  const auto playerWillBeBeforeRightOfBlock =
+      isNonnegative(distanceFirstExceedsSecondHorizontally(
+          blockRectangle, applyHorizontalVelocity(playerState.rectangle,
+                                                  playerState.velocity)));
+  if (playerIsBeforeLeftOfBlock && playerWillBeAheadOfLeftOfBlock &&
+      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+                    CollisionFromRight{}, HorizontalCollision{})) {
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x =
+        leftEdge(blockRectangle) - playerState.rectangle.width;
+  } else if (playerIsAfterRightOfBlock && playerWillBeBeforeRightOfBlock &&
+             passesThrough(playerState.rectangle, blockRectangle,
+                           playerState.velocity, CollisionFromLeft{},
+                           HorizontalCollision{})) {
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x = rightEdge(blockRectangle) + 1;
+  }
+  return playerState;
+}
+
+static auto shiftBackground(Rectangle backgroundSourceRectangle,
+                            int backgroundSourceWidth,
+                            const Rectangle &playerRectangle, int cameraWidth)
+    -> Rectangle {
+  const auto playerDistanceRightOfCameraCenter{
+      leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
+      leftEdge(backgroundSourceRectangle)};
+  const auto distanceFromBackgroundRightEdgeToEnd{
+      backgroundSourceWidth - rightEdge(backgroundSourceRectangle) - 1};
+  if (playerDistanceRightOfCameraCenter > 0 &&
+      distanceFromBackgroundRightEdgeToEnd > 0)
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::min(distanceFromBackgroundRightEdgeToEnd,
+                                      playerDistanceRightOfCameraCenter));
+  if (playerDistanceRightOfCameraCenter < 0 &&
+      leftEdge(backgroundSourceRectangle) > 0)
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::max(-leftEdge(backgroundSourceRectangle),
+                                      playerDistanceRightOfCameraCenter));
+  return backgroundSourceRectangle;
+}
+
+static auto applyVelocity(PlayerState playerState) -> PlayerState {
+  playerState.rectangle = applyVerticalVelocity(
+      applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
+      playerState.velocity);
+  return playerState;
+}
+
+static auto moveTowardPlayer(Rectangle subject, int horizontalVelocity,
+                             const PlayerState &playerState) -> Rectangle {
+  if (leftEdge(playerState.rectangle) < leftEdge(subject))
+    return shiftHorizontally(subject, -horizontalVelocity);
+  if (leftEdge(playerState.rectangle) > leftEdge(subject))
+    return shiftHorizontally(subject, horizontalVelocity);
+  return subject;
+}
+} // namespace sbash64::game
+
+namespace sbash64::game {
+// https://stackoverflow.com/a/53067795
+static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
+  const auto bpp{surface->format->BytesPerPixel};
+  const auto *p = static_cast<const Uint8 *>(surface->pixels) +
+                  static_cast<std::ptrdiff_t>(y) * surface->pitch +
+                  static_cast<std::ptrdiff_t>(x) * bpp;
+  switch (bpp) {
+  case 1:
+    return *p;
+  case 2:
+    return *reinterpret_cast<const Uint16 *>(p);
+  case 3:
+    if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
+      return p[0] << 16 | p[1] << 8 | p[2];
+    else
+      return p[0] | p[1] << 8 | p[2] << 16;
+  case 4:
+    return *reinterpret_cast<const Uint32 *>(p);
+  default:
+    return 0;
+  }
+}
+
 [[noreturn]] static void throwRuntimeError(std::string_view message) {
   std::stringstream stream;
   stream << message << " SDL_Error: " << SDL_GetError();
@@ -586,97 +695,6 @@ static void initializeSDLImage() {
   }
 }
 
-static auto handleVerticalCollisions(PlayerState playerState,
-                                     const Rectangle &blockRectangle,
-                                     const Rectangle &floorRectangle)
-    -> PlayerState {
-  const auto playerIsAboveTopOfBlock =
-      distanceFirstExceedsSecondVertically(playerState.rectangle,
-                                           blockRectangle) < 0;
-  const auto playerIsBelowBottomOfBlock =
-      distanceFirstExceedsSecondVertically(blockRectangle,
-                                           playerState.rectangle) < 0;
-  const auto playerWillBeBelowTopOfBlock =
-      isNonnegative(distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
-          blockRectangle));
-  const auto playerWillBeAboveBottomOfBlock =
-      isNonnegative(distanceFirstExceedsSecondVertically(
-          blockRectangle,
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity)));
-  if (playerIsAboveTopOfBlock && playerWillBeBelowTopOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromBelow{}, VerticalCollision{}))
-    return onPlayerHitGround(playerState, topEdge(blockRectangle));
-  if (playerIsBelowBottomOfBlock && playerWillBeAboveBottomOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromAbove{}, VerticalCollision{})) {
-    playerState.velocity.vertical = {0, 1};
-    playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
-    return playerState;
-  }
-  if (distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
-          floorRectangle) >= 0)
-    return onPlayerHitGround(playerState, topEdge(floorRectangle));
-  return playerState;
-}
-
-static auto handleHorizontalCollisions(PlayerState playerState,
-                                       const Rectangle &blockRectangle)
-    -> PlayerState {
-  const auto playerIsBeforeLeftOfBlock =
-      distanceFirstExceedsSecondHorizontally(playerState.rectangle,
-                                             blockRectangle) < 0;
-  const auto playerIsAfterRightOfBlock =
-      distanceFirstExceedsSecondHorizontally(blockRectangle,
-                                             playerState.rectangle) < 0;
-  const auto playerWillBeAheadOfLeftOfBlock =
-      isNonnegative(distanceFirstExceedsSecondHorizontally(
-          applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
-          blockRectangle));
-  const auto playerWillBeBeforeRightOfBlock =
-      isNonnegative(distanceFirstExceedsSecondHorizontally(
-          blockRectangle, applyHorizontalVelocity(playerState.rectangle,
-                                                  playerState.velocity)));
-  if (playerIsBeforeLeftOfBlock && playerWillBeAheadOfLeftOfBlock &&
-      passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromRight{}, HorizontalCollision{})) {
-    playerState.velocity.horizontal = 0;
-    playerState.rectangle.origin.x =
-        leftEdge(blockRectangle) - playerState.rectangle.width;
-  } else if (playerIsAfterRightOfBlock && playerWillBeBeforeRightOfBlock &&
-             passesThrough(playerState.rectangle, blockRectangle,
-                           playerState.velocity, CollisionFromLeft{},
-                           HorizontalCollision{})) {
-    playerState.velocity.horizontal = 0;
-    playerState.rectangle.origin.x = rightEdge(blockRectangle) + 1;
-  }
-  return playerState;
-}
-
-static auto shiftBackground(Rectangle backgroundSourceRectangle,
-                            int backgroundSourceWidth,
-                            const Rectangle &playerRectangle, int cameraWidth)
-    -> Rectangle {
-  const auto playerDistanceRightOfCameraCenter{
-      leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
-      leftEdge(backgroundSourceRectangle)};
-  const auto distanceFromBackgroundRightEdgeToEnd{
-      backgroundSourceWidth - rightEdge(backgroundSourceRectangle) - 1};
-  if (playerDistanceRightOfCameraCenter > 0 &&
-      distanceFromBackgroundRightEdgeToEnd > 0)
-    return shiftHorizontally(backgroundSourceRectangle,
-                             std::min(distanceFromBackgroundRightEdgeToEnd,
-                                      playerDistanceRightOfCameraCenter));
-  if (playerDistanceRightOfCameraCenter < 0 &&
-      leftEdge(backgroundSourceRectangle) > 0)
-    return shiftHorizontally(backgroundSourceRectangle,
-                             std::max(-leftEdge(backgroundSourceRectangle),
-                                      playerDistanceRightOfCameraCenter));
-  return backgroundSourceRectangle;
-}
-
 static auto applyHorizontalForces(PlayerState playerState, int groundFriction,
                                   int playerMaxHorizontalSpeed,
                                   int playerRunAcceleration) -> PlayerState {
@@ -708,22 +726,6 @@ static auto applyVerticalForces(PlayerState playerState,
       playerState.velocity.vertical = {0, 1};
   }
   return playerState;
-}
-
-static auto applyVelocity(PlayerState playerState) -> PlayerState {
-  playerState.rectangle = applyVerticalVelocity(
-      applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
-      playerState.velocity);
-  return playerState;
-}
-
-static auto moveTowardPlayer(Rectangle subject, int horizontalVelocity,
-                             const PlayerState &playerState) -> Rectangle {
-  if (leftEdge(playerState.rectangle) < leftEdge(subject))
-    return shiftHorizontally(subject, -horizontalVelocity);
-  if (leftEdge(playerState.rectangle) > leftEdge(subject))
-    return shiftHorizontally(subject, horizontalVelocity);
-  return subject;
 }
 
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
