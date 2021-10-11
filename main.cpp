@@ -270,7 +270,9 @@ constexpr auto withFriction(int velocity, int friction) -> int {
   return ((velocity < 0) ? -1 : 1) * std::max(0, std::abs(velocity) - friction);
 }
 
-constexpr auto isNonnegative(int a) -> bool { return a >= 0; }
+constexpr auto isNegative(int a) -> bool { return a < 0; }
+
+constexpr auto isNonnegative(int a) -> bool { return !isNegative(a); }
 
 class CollisionDirection {
 public:
@@ -461,11 +463,11 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
           axis.applyVelocityNormalToSurface(subjectRectangle, subjectVelocity),
           objectRectangle) < 0)
     return false;
-  if (!isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
+  if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
           subjectRectangle, objectRectangle)))
     return subjectPassesThroughObjectTowardUpperBoundary(
         subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
-  if (!isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
+  if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
           objectRectangle, subjectRectangle)))
     return subjectPassesThroughObjectTowardLowerBoundary(
         subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
