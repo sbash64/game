@@ -692,12 +692,15 @@ static void applyVerticalForces(Velocity &playerVelocity,
   }
 }
 
-static void present(sdl_wrappers::Renderer &rendererWrapper,
-                    sdl_wrappers::Texture &playerTextureWrapper,
-                    sdl_wrappers::Texture &backgroundTextureWrapper,
+static void present(const sdl_wrappers::Renderer &rendererWrapper,
+                    const sdl_wrappers::Texture &playerTextureWrapper,
+                    const sdl_wrappers::Texture &backgroundTextureWrapper,
+                    const sdl_wrappers::Texture &enemyTextureWrapper,
                     const SDL_Rect &playerSourceRect,
                     const Rectangle &playerRectangle,
-                    const Rectangle &backgroundSourceRectangle, int cameraWidth,
+                    const Rectangle &backgroundSourceRectangle,
+                    const SDL_Rect &enemySourceRect,
+                    const Rectangle &enemyRectangle, int cameraWidth,
                     int cameraHeight, int pixelScale) {
   const auto backgroundSourceRectConverted{
       toSDLRect(backgroundSourceRectangle)};
@@ -706,6 +709,12 @@ static void present(sdl_wrappers::Renderer &rendererWrapper,
   SDL_RenderCopyEx(rendererWrapper.renderer, backgroundTextureWrapper.texture,
                    &backgroundSourceRectConverted, &backgroundProjection, 0,
                    nullptr, SDL_FLIP_NONE);
+  auto enemyPreProjection{enemyRectangle};
+  enemyPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
+  const auto enemyProjection{toSDLRect(enemyPreProjection * pixelScale)};
+  SDL_RenderCopyEx(rendererWrapper.renderer, enemyTextureWrapper.texture,
+                   &enemySourceRect, &enemyProjection, 0, nullptr,
+                   SDL_FLIP_NONE);
   auto playerPreProjection{playerRectangle};
   playerPreProjection.origin.x -= leftEdge(backgroundSourceRectangle);
   const auto playerProjection{toSDLRect(playerPreProjection * pixelScale)};
@@ -722,7 +731,8 @@ static void flushEvents(bool &playing) {
 }
 
 static auto run(const std::string &playerImagePath,
-                const std::string &backgroundImagePath) -> int {
+                const std::string &backgroundImagePath,
+                const std::string &enemyImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
   constexpr auto pixelScale{4};
   const auto cameraWidth{256};
@@ -741,10 +751,18 @@ static auto run(const std::string &playerImagePath,
   const SDL_Rect playerSourceRect{1, 9, playerWidth, playerHeight};
   sdl_wrappers::ImageSurface backgroundImageSurfaceWrapper{backgroundImagePath};
   const auto backgroundSourceWidth{backgroundImageSurfaceWrapper.surface->w};
+  sdl_wrappers::ImageSurface enemyImageSurfaceWrapper{enemyImagePath};
+  SDL_SetColorKey(enemyImageSurfaceWrapper.surface, SDL_TRUE,
+                  getpixel(enemyImageSurfaceWrapper.surface, 1, 28));
+  const auto enemyWidth{16};
+  const auto enemyHeight{16};
+  const SDL_Rect enemySourceRect{1, 28, enemyWidth, enemyHeight};
   sdl_wrappers::Texture playerTextureWrapper{rendererWrapper.renderer,
                                              playerImageSurfaceWrapper.surface};
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
+  sdl_wrappers::Texture enemyTextureWrapper{rendererWrapper.renderer,
+                                            enemyImageSurfaceWrapper.surface};
   const Rectangle floorRectangle{Point{0, cameraHeight - 32},
                                  backgroundSourceWidth, 32};
   const RationalNumber gravity{1, 4};
@@ -756,6 +774,8 @@ static auto run(const std::string &playerImagePath,
                             playerWidth, playerHeight};
   Velocity playerVelocity{{0, 1}, 0};
   auto playerJumpState{JumpState::grounded};
+  Rectangle enemyRectangle{Point{140, topEdge(floorRectangle) - enemyHeight},
+                           enemyWidth, enemyHeight};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
   auto playing{true};
@@ -774,7 +794,8 @@ static auto run(const std::string &playerImagePath,
     shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                     playerRectangle, cameraWidth);
     present(rendererWrapper, playerTextureWrapper, backgroundTextureWrapper,
-            playerSourceRect, playerRectangle, backgroundSourceRectangle,
+            enemyTextureWrapper, playerSourceRect, playerRectangle,
+            backgroundSourceRectangle, enemySourceRect, enemyRectangle,
             cameraWidth, cameraHeight, pixelScale);
   }
   return EXIT_SUCCESS;
@@ -782,10 +803,10 @@ static auto run(const std::string &playerImagePath,
 } // namespace sbash64::game
 
 int main(int argc, char *argv[]) {
-  if (argc < 3)
+  if (argc < 4)
     return EXIT_FAILURE;
   try {
-    return sbash64::game::run(argv[1], argv[2]);
+    return sbash64::game::run(argv[1], argv[2], argv[3]);
   } catch (const std::runtime_error &e) {
     std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
