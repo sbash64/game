@@ -464,17 +464,13 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
           objectRectangle) < 0)
     return false;
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          subjectRectangle, objectRectangle)))
+          subjectRectangle, objectRectangle)) ||
+      axis.headingTowardUpperBoundary(subjectVelocity))
     return subjectPassesThroughObjectTowardUpperBoundary(
         subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          objectRectangle, subjectRectangle)))
-    return subjectPassesThroughObjectTowardLowerBoundary(
-        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
-  if (axis.headingTowardUpperBoundary(subjectVelocity))
-    return subjectPassesThroughObjectTowardUpperBoundary(
-        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
-  if (axis.headingTowardLowerBoundary(subjectVelocity))
+          objectRectangle, subjectRectangle)) ||
+      axis.headingTowardLowerBoundary(subjectVelocity))
     return subjectPassesThroughObjectTowardLowerBoundary(
         subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
   return true;
