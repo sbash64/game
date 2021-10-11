@@ -481,12 +481,6 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
          subjectPassesThroughObjectDirectly;
 }
 
-constexpr auto pixelScale{4};
-const auto cameraWidth{256};
-const auto cameraHeight{240};
-constexpr auto screenWidth{cameraWidth * pixelScale};
-constexpr auto screenHeight{cameraHeight * pixelScale};
-
 static void onPlayerHitGround(RationalNumber &playerVerticalVelocity,
                               Rectangle &playerRectangle,
                               JumpState &playerJumpState, int ground) {
@@ -513,10 +507,10 @@ struct Init {
 };
 
 struct Window {
-  Window()
+  Window(int width, int height)
       : window{SDL_CreateWindow("SDL Tutorial", SDL_WINDOWPOS_UNDEFINED,
-                                SDL_WINDOWPOS_UNDEFINED, screenWidth,
-                                screenHeight, SDL_WINDOW_SHOWN)} {
+                                SDL_WINDOWPOS_UNDEFINED, width, height,
+                                SDL_WINDOW_SHOWN)} {
     if (window == nullptr)
       throwRuntimeError("Window could not be created!");
   }
@@ -655,8 +649,8 @@ static void handleHorizontalCollisions(Rectangle &playerRectangle,
 }
 
 static void shiftBackground(Rectangle &backgroundSourceRectangle,
-                            const int &backgroundSourceWidth,
-                            const Rectangle &playerRectangle) {
+                            int backgroundSourceWidth,
+                            const Rectangle &playerRectangle, int cameraWidth) {
   const auto playerDistanceRightOfCameraCenter{
       leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
       leftEdge(backgroundSourceRectangle)};
@@ -711,7 +705,8 @@ static void present(sdl_wrappers::Renderer &rendererWrapper,
                     sdl_wrappers::Texture &backgroundTextureWrapper,
                     const SDL_Rect &playerSourceRect,
                     const Rectangle &playerRectangle,
-                    const Rectangle &backgroundSourceRectangle) {
+                    const Rectangle &backgroundSourceRectangle, int cameraWidth,
+                    int cameraHeight, int pixelScale) {
   const auto backgroundSourceRectConverted{
       toSDLRect(backgroundSourceRectangle)};
   const Rectangle backgroundRectangle{{0, 0}, cameraWidth, cameraHeight};
@@ -737,7 +732,12 @@ static void flushEvents(bool &playing) {
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath) -> int {
   sdl_wrappers::Init scopedInitialization;
-  sdl_wrappers::Window windowWrapper;
+  constexpr auto pixelScale{4};
+  const auto cameraWidth{256};
+  const auto cameraHeight{240};
+  constexpr auto screenWidth{cameraWidth * pixelScale};
+  constexpr auto screenHeight{cameraHeight * pixelScale};
+  sdl_wrappers::Window windowWrapper{screenWidth, screenHeight};
   sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
   initializeSDLImage();
@@ -754,15 +754,15 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::Texture backgroundTextureWrapper{
       rendererWrapper.renderer, backgroundImageSurfaceWrapper.surface};
   const auto ground{cameraHeight - 32};
-  Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
-                            playerHeight};
-  Velocity playerVelocity{{0, 1}, 0};
-  auto playerJumpState{JumpState::grounded};
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
   const auto playerJumpAcceleration{-6};
   const auto playerRunAcceleration{2};
+  Rectangle playerRectangle{Point{0, ground - playerHeight}, playerWidth,
+                            playerHeight};
+  Velocity playerVelocity{{0, 1}, 0};
+  auto playerJumpState{JumpState::grounded};
   Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
   auto playing{true};
@@ -779,9 +779,10 @@ static auto run(const std::string &playerImagePath,
         applyHorizontalVelocity(playerRectangle, playerVelocity),
         playerVelocity);
     shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
-                    playerRectangle);
+                    playerRectangle, cameraWidth);
     present(rendererWrapper, playerTextureWrapper, backgroundTextureWrapper,
-            playerSourceRect, playerRectangle, backgroundSourceRectangle);
+            playerSourceRect, playerRectangle, backgroundSourceRectangle,
+            cameraWidth, cameraHeight, pixelScale);
   }
   return EXIT_SUCCESS;
 }
