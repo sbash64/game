@@ -76,8 +76,13 @@ constexpr auto operator+=(RationalNumber &a, RationalNumber b)
   }
 }
 
+constexpr auto operator+=(RationalNumber &a, int b) -> RationalNumber {
+  a.numerator += a.denominator * b;
+  return a;
+}
+
 constexpr auto operator+(RationalNumber a, int b) -> RationalNumber {
-  return RationalNumber{a.numerator + a.denominator * b, a.denominator};
+  return a += b;
 }
 
 constexpr auto operator+(RationalNumber a, RationalNumber b) -> RationalNumber {
@@ -684,7 +689,7 @@ static void applyHorizontalForces(Velocity &playerVelocity, int groundFriction,
 
 static void applyVerticalForces(Velocity &playerVelocity,
                                 JumpState &playerJumpState,
-                                RationalNumber playerJumpAcceleration,
+                                int playerJumpAcceleration,
                                 RationalNumber gravity) {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_UP) &&
@@ -756,7 +761,7 @@ static auto run(const std::string &playerImagePath,
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
-  const RationalNumber playerJumpAcceleration{-6, 1};
+  const auto playerJumpAcceleration{-6};
   const auto playerRunAcceleration{2};
   Rectangle blockRectangle{Point{256, 144}, 15, 15};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
