@@ -485,23 +485,41 @@ static auto onPlayerHitGround(PlayerState playerState, int ground)
   return playerState;
 }
 
-static auto handleVerticalCollisions(PlayerState playerState,
-                                     const Rectangle &blockRectangle,
-                                     const Rectangle &floorRectangle)
-    -> PlayerState {
-  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromBelow{}, VerticalCollision{}))
-    return onPlayerHitGround(playerState, topEdge(blockRectangle));
-  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromAbove{}, VerticalCollision{})) {
-    playerState.velocity.vertical = {0, 1};
-    playerState.rectangle.origin.y = bottomEdge(blockRectangle) + 1;
-    return playerState;
-  }
+static auto sortByTopEdge(std::vector<Rectangle> objects)
+    -> std::vector<Rectangle> {
+  std::sort(objects.begin(), objects.end(),
+            [](Rectangle a, Rectangle b) { return topEdge(a) < topEdge(b); });
+  return objects;
+}
+
+static auto sortByBottomEdge(std::vector<Rectangle> objects)
+    -> std::vector<Rectangle> {
+  std::sort(objects.begin(), objects.end(), [](Rectangle a, Rectangle b) {
+    return bottomEdge(a) > bottomEdge(b);
+  });
+  return objects;
+}
+
+static auto handleVerticalCollisions(
+    PlayerState playerState,
+    const std::vector<Rectangle> &collisionFromBelowCandidates,
+    const std::vector<Rectangle> &collisionFromAboveCandidates,
+    const Rectangle &floorRectangle) -> PlayerState {
+  for (const auto object : sortByTopEdge(collisionFromBelowCandidates))
+    if (passesThrough(playerState.rectangle, object, playerState.velocity,
+                      CollisionFromBelow{}, VerticalCollision{}))
+      return onPlayerHitGround(playerState, topEdge(object));
   if (distanceFirstExceedsSecondVertically(
           applyVerticalVelocity(playerState.rectangle, playerState.velocity),
           floorRectangle) >= 0)
     return onPlayerHitGround(playerState, topEdge(floorRectangle));
+  for (const auto object : sortByBottomEdge(collisionFromAboveCandidates))
+    if (passesThrough(playerState.rectangle, object, playerState.velocity,
+                      CollisionFromAbove{}, VerticalCollision{})) {
+      playerState.velocity.vertical = {0, 1};
+      playerState.rectangle.origin.y = bottomEdge(object) + 1;
+      return playerState;
+    }
   return playerState;
 }
 
@@ -520,11 +538,12 @@ static auto sortByRightEdge(std::vector<Rectangle> objects)
   return objects;
 }
 
-static auto handleHorizontalCollisions(PlayerState playerState,
-                                       const std::vector<Rectangle> &objects,
-                                       const Rectangle &levelRectangle)
-    -> PlayerState {
-  for (const auto object : sortByLeftEdge(objects))
+static auto handleHorizontalCollisions(
+    PlayerState playerState,
+    const std::vector<Rectangle> &collisionFromRightCandidates,
+    const std::vector<Rectangle> &collisionFromLeftCandidates,
+    const Rectangle &levelRectangle) -> PlayerState {
+  for (const auto object : sortByLeftEdge(collisionFromRightCandidates))
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
                       CollisionFromRight{}, HorizontalCollision{})) {
       playerState.velocity.horizontal = 0;
@@ -542,7 +561,7 @@ static auto handleHorizontalCollisions(PlayerState playerState,
     return playerState;
   }
 
-  for (const auto object : sortByRightEdge(objects))
+  for (const auto object : sortByRightEdge(collisionFromLeftCandidates))
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
                       CollisionFromLeft{}, HorizontalCollision{})) {
       playerState.velocity.horizontal = 0;
@@ -832,8 +851,9 @@ static auto run(const std::string &playerImagePath,
                                                       playerMaxHorizontalSpeed,
                                                       playerRunAcceleration),
                                 playerJumpAcceleration, gravity),
-            blockRectangle, floorRectangle),
-        {blockRectangle, pipeRectangle}, levelRectangle));
+            {blockRectangle, pipeRectangle}, {blockRectangle}, floorRectangle),
+        {blockRectangle, pipeRectangle}, {blockRectangle, pipeRectangle},
+        levelRectangle));
     enemyRectangle =
         moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
     backgroundSourceRectangle =
