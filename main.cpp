@@ -818,6 +818,9 @@ static auto run(const std::string &playerImagePath,
   Rectangle enemyRectangle{Point{140, topEdge(floorRectangle) - enemyHeight},
                            enemyWidth, enemyHeight};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
+  const auto pipeHeight{40};
+  const Rectangle pipeRectangle{
+      Point{448, topEdge(floorRectangle) - pipeHeight}, 30, pipeHeight};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
   auto playing{true};
   while (playing) {
@@ -830,7 +833,7 @@ static auto run(const std::string &playerImagePath,
                                                       playerRunAcceleration),
                                 playerJumpAcceleration, gravity),
             blockRectangle, floorRectangle),
-        {blockRectangle}, levelRectangle));
+        {blockRectangle, pipeRectangle}, levelRectangle));
     enemyRectangle =
         moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
     backgroundSourceRectangle =
