@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace sbash64::game {
 struct RationalNumber {
@@ -505,16 +506,17 @@ static auto handleVerticalCollisions(PlayerState playerState,
 }
 
 static auto handleHorizontalCollisions(PlayerState playerState,
-                                       const Rectangle &blockRectangle,
+                                       const std::vector<Rectangle> &objects,
                                        const Rectangle &levelRectangle)
     -> PlayerState {
-  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromRight{}, HorizontalCollision{})) {
-    playerState.velocity.horizontal = 0;
-    playerState.rectangle.origin.x =
-        leftEdge(blockRectangle) - playerState.rectangle.width;
-    return playerState;
-  }
+  for (const auto object : objects)
+    if (passesThrough(playerState.rectangle, object, playerState.velocity,
+                      CollisionFromRight{}, HorizontalCollision{})) {
+      playerState.velocity.horizontal = 0;
+      playerState.rectangle.origin.x =
+          leftEdge(object) - playerState.rectangle.width;
+      return playerState;
+    }
   if (rightEdge(applyHorizontalVelocity(playerState.rectangle,
                                         playerState.velocity)) -
           rightEdge(levelRectangle) >=
@@ -524,12 +526,14 @@ static auto handleHorizontalCollisions(PlayerState playerState,
         rightEdge(levelRectangle) - playerState.rectangle.width;
     return playerState;
   }
-  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
-                    CollisionFromLeft{}, HorizontalCollision{})) {
-    playerState.velocity.horizontal = 0;
-    playerState.rectangle.origin.x = rightEdge(blockRectangle) + 1;
-    return playerState;
-  }
+
+  for (const auto object : objects)
+    if (passesThrough(playerState.rectangle, object, playerState.velocity,
+                      CollisionFromLeft{}, HorizontalCollision{})) {
+      playerState.velocity.horizontal = 0;
+      playerState.rectangle.origin.x = rightEdge(object) + 1;
+      return playerState;
+    }
   if (leftEdge(levelRectangle) -
           leftEdge(applyHorizontalVelocity(playerState.rectangle,
                                            playerState.velocity)) >=
@@ -811,7 +815,7 @@ static auto run(const std::string &playerImagePath,
                                                       playerRunAcceleration),
                                 playerJumpAcceleration, gravity),
             blockRectangle, floorRectangle),
-        blockRectangle, levelRectangle));
+        {blockRectangle}, levelRectangle));
     enemyRectangle =
         moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
     backgroundSourceRectangle =
