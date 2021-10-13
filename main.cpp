@@ -505,11 +505,26 @@ static auto handleVerticalCollisions(PlayerState playerState,
   return playerState;
 }
 
+static auto sortByLeftEdge(std::vector<Rectangle> objects)
+    -> std::vector<Rectangle> {
+  std::sort(objects.begin(), objects.end(),
+            [](Rectangle a, Rectangle b) { return leftEdge(a) < leftEdge(b); });
+  return objects;
+}
+
+static auto sortByRightEdge(std::vector<Rectangle> objects)
+    -> std::vector<Rectangle> {
+  std::sort(objects.begin(), objects.end(), [](Rectangle a, Rectangle b) {
+    return rightEdge(a) > rightEdge(b);
+  });
+  return objects;
+}
+
 static auto handleHorizontalCollisions(PlayerState playerState,
                                        const std::vector<Rectangle> &objects,
                                        const Rectangle &levelRectangle)
     -> PlayerState {
-  for (const auto object : objects)
+  for (const auto object : sortByLeftEdge(objects))
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
                       CollisionFromRight{}, HorizontalCollision{})) {
       playerState.velocity.horizontal = 0;
@@ -527,7 +542,7 @@ static auto handleHorizontalCollisions(PlayerState playerState,
     return playerState;
   }
 
-  for (const auto object : objects)
+  for (const auto object : sortByRightEdge(objects))
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
                       CollisionFromLeft{}, HorizontalCollision{})) {
       playerState.velocity.horizontal = 0;
