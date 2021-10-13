@@ -505,18 +505,38 @@ static auto handleVerticalCollisions(PlayerState playerState,
 }
 
 static auto handleHorizontalCollisions(PlayerState playerState,
-                                       const Rectangle &blockRectangle)
+                                       const Rectangle &blockRectangle,
+                                       const Rectangle &levelRectangle)
     -> PlayerState {
   if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
                     CollisionFromRight{}, HorizontalCollision{})) {
     playerState.velocity.horizontal = 0;
     playerState.rectangle.origin.x =
         leftEdge(blockRectangle) - playerState.rectangle.width;
-  } else if (passesThrough(playerState.rectangle, blockRectangle,
-                           playerState.velocity, CollisionFromLeft{},
-                           HorizontalCollision{})) {
+    return playerState;
+  }
+  if (rightEdge(applyHorizontalVelocity(playerState.rectangle,
+                                        playerState.velocity)) -
+          rightEdge(levelRectangle) >=
+      0) {
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x =
+        rightEdge(levelRectangle) - playerState.rectangle.width;
+    return playerState;
+  }
+  if (passesThrough(playerState.rectangle, blockRectangle, playerState.velocity,
+                    CollisionFromLeft{}, HorizontalCollision{})) {
     playerState.velocity.horizontal = 0;
     playerState.rectangle.origin.x = rightEdge(blockRectangle) + 1;
+    return playerState;
+  }
+  if (leftEdge(levelRectangle) -
+          leftEdge(applyHorizontalVelocity(playerState.rectangle,
+                                           playerState.velocity)) >=
+      0) {
+    playerState.velocity.horizontal = 0;
+    playerState.rectangle.origin.x = leftEdge(levelRectangle) + 1;
+    return playerState;
   }
   return playerState;
 }
@@ -764,6 +784,8 @@ static auto run(const std::string &playerImagePath,
                                             enemyImageSurfaceWrapper.surface};
   const Rectangle floorRectangle{Point{0, cameraHeight - 32},
                                  backgroundSourceWidth, 32};
+  const Rectangle levelRectangle{Point{-1, -1}, backgroundSourceWidth + 1,
+                                 cameraHeight + 1};
   const RationalNumber gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
@@ -789,7 +811,7 @@ static auto run(const std::string &playerImagePath,
                                                       playerRunAcceleration),
                                 playerJumpAcceleration, gravity),
             blockRectangle, floorRectangle),
-        blockRectangle));
+        blockRectangle, levelRectangle));
     enemyRectangle =
         moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
     backgroundSourceRectangle =
