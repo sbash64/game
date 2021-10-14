@@ -21,6 +21,10 @@
 #include <vector>
 
 namespace sbash64::game {
+constexpr auto isNegative(int a) -> bool { return a < 0; }
+
+constexpr auto isNonnegative(int a) -> bool { return !isNegative(a); }
+
 struct RationalNumber {
   int numerator;
   int denominator;
@@ -80,7 +84,7 @@ constexpr auto operator/(RationalNumber a, int b) -> RationalNumber {
 }
 
 constexpr auto operator<(RationalNumber a, RationalNumber b) -> bool {
-  return (a.denominator < 0 ^ b.denominator < 0) != 0
+  return (isNegative(a.denominator) ^ isNegative(b.denominator)) != 0
              ? a.numerator * b.denominator > b.numerator * a.denominator
              : a.numerator * b.denominator < b.numerator * a.denominator;
 }
@@ -98,24 +102,25 @@ constexpr auto operator>=(RationalNumber a, RationalNumber b) -> bool {
 }
 
 constexpr auto operator<(RationalNumber a, int b) -> bool {
-  return a.denominator < 0 ? a.numerator > b * a.denominator
-                           : a.numerator < b * a.denominator;
+  return isNegative(a.denominator) ? a.numerator > b * a.denominator
+                                   : a.numerator < b * a.denominator;
 }
 
 constexpr auto operator>(RationalNumber a, int b) -> bool {
-  return a.denominator < 0 ? a.numerator < b * a.denominator
-                           : a.numerator > b * a.denominator;
+  return isNegative(a.denominator) ? a.numerator < b * a.denominator
+                                   : a.numerator > b * a.denominator;
 }
 
-constexpr auto absoluteValue(int a) -> int { return a < 0 ? -a : a; }
+constexpr auto absoluteValue(int a) -> int { return isNegative(a) ? -a : a; }
 
 constexpr auto round(RationalNumber a) -> int {
   const auto division{a.numerator / a.denominator};
   if (absoluteValue(a.numerator) % a.denominator <
       (absoluteValue(a.denominator) + 1) / 2)
     return division;
-  return (a.numerator < 0 ^ a.denominator < 0) != 0 ? division - 1
-                                                    : division + 1;
+  return (isNegative(a.numerator) ^ isNegative(a.denominator)) != 0
+             ? division - 1
+             : division + 1;
 }
 
 static_assert(7 % 4 == 3, "do I understand cpp modulus?");
@@ -273,12 +278,9 @@ constexpr auto clamp(int velocity, int limit) -> int {
 }
 
 constexpr auto withFriction(int velocity, int friction) -> int {
-  return ((velocity < 0) ? -1 : 1) * std::max(0, std::abs(velocity) - friction);
+  return (isNegative(velocity) ? -1 : 1) *
+         std::max(0, std::abs(velocity) - friction);
 }
-
-constexpr auto isNegative(int a) -> bool { return a < 0; }
-
-constexpr auto isNonnegative(int a) -> bool { return !isNegative(a); }
 
 class CollisionDirection {
 public:
@@ -332,7 +334,7 @@ public:
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return round(a.vertical) < 0;
+    return isNegative(round(a.vertical));
   }
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
@@ -367,7 +369,7 @@ public:
 
   [[nodiscard]] auto headingTowardLowerBoundary(Velocity a) const
       -> bool override {
-    return a.horizontal < 0;
+    return isNegative(a.horizontal);
   }
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
@@ -465,9 +467,9 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
                           const CollisionAxis &axis) -> bool {
   if (isNonnegative(direction.distanceSubjectPenetratesObject(
           subjectRectangle, objectRectangle)) ||
-      direction.distanceSubjectPenetratesObject(
+      isNegative(direction.distanceSubjectPenetratesObject(
           axis.applyVelocityNormalToSurface(subjectRectangle, subjectVelocity),
-          objectRectangle) < 0)
+          objectRectangle)))
     return false;
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
           subjectRectangle, objectRectangle)) ||
@@ -514,9 +516,9 @@ static auto handleVerticalCollisions(
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
                       CollisionFromBelow{}, VerticalCollision{}))
       return onPlayerHitGround(playerState, topEdge(object));
-  if (distanceFirstExceedsSecondVertically(
+  if (isNonnegative(distanceFirstExceedsSecondVertically(
           applyVerticalVelocity(playerState.rectangle, playerState.velocity),
-          floorRectangle) >= 0)
+          floorRectangle)))
     return onPlayerHitGround(playerState, topEdge(floorRectangle));
   for (const auto object : sortByBottomEdge(collisionFromAboveCandidates))
     if (passesThrough(playerState.rectangle, object, playerState.velocity,
@@ -555,9 +557,9 @@ static auto handleHorizontalCollisions(
       object.rectangle.origin.x = leftEdge(candidate) - object.rectangle.width;
       return object;
     }
-  if (rightEdge(applyHorizontalVelocity(object.rectangle, object.velocity)) -
-          rightEdge(levelRectangle) >=
-      0) {
+  if (isNonnegative(rightEdge(applyHorizontalVelocity(object.rectangle,
+                                                      object.velocity)) -
+                    rightEdge(levelRectangle))) {
     object.velocity.horizontal = 0;
     object.rectangle.origin.x =
         rightEdge(levelRectangle) - object.rectangle.width;
@@ -571,9 +573,9 @@ static auto handleHorizontalCollisions(
       object.rectangle.origin.x = rightEdge(candidate) + 1;
       return object;
     }
-  if (leftEdge(levelRectangle) - leftEdge(applyHorizontalVelocity(
-                                     object.rectangle, object.velocity)) >=
-      0) {
+  if (isNonnegative(leftEdge(levelRectangle) -
+                    leftEdge(applyHorizontalVelocity(object.rectangle,
+                                                     object.velocity)))) {
     object.velocity.horizontal = 0;
     object.rectangle.origin.x = leftEdge(levelRectangle) + 1;
     return object;
