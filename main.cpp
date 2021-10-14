@@ -21,31 +21,34 @@
 #include <vector>
 
 namespace sbash64::game {
-constexpr auto isNegative(int a) -> bool { return a < 0; }
+using distance_type = int;
 
-constexpr auto isNonnegative(int a) -> bool { return !isNegative(a); }
+constexpr auto isNegative(distance_type a) -> bool { return a < 0; }
 
-struct RationalNumber {
-  int numerator;
-  int denominator;
+constexpr auto isNonnegative(distance_type a) -> bool { return !isNegative(a); }
 
-  auto operator==(const RationalNumber &) const -> bool = default;
+struct RationalDistance {
+  distance_type numerator;
+  distance_type denominator;
+
+  auto operator==(const RationalDistance &) const -> bool = default;
 };
 
-constexpr auto operator+=(RationalNumber &a, RationalNumber b)
-    -> RationalNumber & {
+constexpr auto operator+=(RationalDistance &a, RationalDistance b)
+    -> RationalDistance & {
   const auto smallerDenominator{std::min(a.denominator, b.denominator)};
   const auto largerDenominator{std::max(a.denominator, b.denominator)};
   auto commonDenominator = smallerDenominator;
   auto candidateDenominator = largerDenominator;
   while (true) {
-    while (commonDenominator <
-           std::min(std::numeric_limits<int>::max() - smallerDenominator,
-                    candidateDenominator))
+    while (
+        commonDenominator <
+        std::min(std::numeric_limits<distance_type>::max() - smallerDenominator,
+                 candidateDenominator))
       commonDenominator += smallerDenominator;
     if (commonDenominator != candidateDenominator) {
       if (candidateDenominator <
-          std::numeric_limits<int>::max() - largerDenominator)
+          std::numeric_limits<distance_type>::max() - largerDenominator)
         candidateDenominator += largerDenominator;
       else
         return a;
@@ -58,62 +61,69 @@ constexpr auto operator+=(RationalNumber &a, RationalNumber b)
   }
 }
 
-constexpr auto operator+=(RationalNumber &a, int b) -> RationalNumber {
+constexpr auto operator+=(RationalDistance &a, distance_type b)
+    -> RationalDistance {
   a.numerator += a.denominator * b;
   return a;
 }
 
-constexpr auto operator+(RationalNumber a, int b) -> RationalNumber {
+constexpr auto operator+(RationalDistance a, distance_type b)
+    -> RationalDistance {
   return a += b;
 }
 
-constexpr auto operator+(RationalNumber a, RationalNumber b) -> RationalNumber {
+constexpr auto operator+(RationalDistance a, RationalDistance b)
+    -> RationalDistance {
   return a += b;
 }
 
-constexpr auto operator-(RationalNumber a) -> RationalNumber {
+constexpr auto operator-(RationalDistance a) -> RationalDistance {
   return {-a.numerator, a.denominator};
 }
 
-constexpr auto operator/(RationalNumber a, RationalNumber b) -> RationalNumber {
+constexpr auto operator/(RationalDistance a, RationalDistance b)
+    -> RationalDistance {
   return {a.numerator * b.denominator, a.denominator * b.numerator};
 }
 
-constexpr auto operator/(RationalNumber a, int b) -> RationalNumber {
+constexpr auto operator/(RationalDistance a, distance_type b)
+    -> RationalDistance {
   return {a.numerator, a.denominator * b};
 }
 
-constexpr auto operator<(RationalNumber a, RationalNumber b) -> bool {
+constexpr auto operator<(RationalDistance a, RationalDistance b) -> bool {
   return (isNegative(a.denominator) ^ isNegative(b.denominator)) != 0
              ? a.numerator * b.denominator > b.numerator * a.denominator
              : a.numerator * b.denominator < b.numerator * a.denominator;
 }
 
-constexpr auto operator>(RationalNumber a, RationalNumber b) -> bool {
+constexpr auto operator>(RationalDistance a, RationalDistance b) -> bool {
   return b < a;
 }
 
-constexpr auto operator<=(RationalNumber a, RationalNumber b) -> bool {
+constexpr auto operator<=(RationalDistance a, RationalDistance b) -> bool {
   return !(a > b);
 }
 
-constexpr auto operator>=(RationalNumber a, RationalNumber b) -> bool {
+constexpr auto operator>=(RationalDistance a, RationalDistance b) -> bool {
   return !(a < b);
 }
 
-constexpr auto operator<(RationalNumber a, int b) -> bool {
+constexpr auto operator<(RationalDistance a, distance_type b) -> bool {
   return isNegative(a.denominator) ? a.numerator > b * a.denominator
                                    : a.numerator < b * a.denominator;
 }
 
-constexpr auto operator>(RationalNumber a, int b) -> bool {
+constexpr auto operator>(RationalDistance a, distance_type b) -> bool {
   return isNegative(a.denominator) ? a.numerator < b * a.denominator
                                    : a.numerator > b * a.denominator;
 }
 
-constexpr auto absoluteValue(int a) -> int { return isNegative(a) ? -a : a; }
+constexpr auto absoluteValue(distance_type a) -> distance_type {
+  return isNegative(a) ? -a : a;
+}
 
-constexpr auto round(RationalNumber a) -> int {
+constexpr auto round(RationalDistance a) -> distance_type {
   const auto division{a.numerator / a.denominator};
   if (absoluteValue(a.numerator) % a.denominator <
       (absoluteValue(a.denominator) + 1) / 2)
@@ -128,86 +138,88 @@ static_assert(7 % -4 == 3, "do I understand cpp modulus?");
 static_assert(-7 % 4 == -3, "do I understand cpp modulus?");
 static_assert(-7 % -4 == -3, "do I understand cpp modulus?");
 
-static_assert(RationalNumber{3, 4} + RationalNumber{5, 6} ==
-                  RationalNumber{19, 12},
+static_assert(RationalDistance{3, 4} + RationalDistance{5, 6} ==
+                  RationalDistance{19, 12},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{4, 7} + RationalNumber{2, 3} ==
-                  RationalNumber{26, 21},
+static_assert(RationalDistance{4, 7} + RationalDistance{2, 3} ==
+                  RationalDistance{26, 21},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{4, 7} + RationalNumber{-2, 3} ==
-                  RationalNumber{-2, 21},
+static_assert(RationalDistance{4, 7} + RationalDistance{-2, 3} ==
+                  RationalDistance{-2, 21},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{4, 7} + 3 == RationalNumber{25, 7},
+static_assert(RationalDistance{4, 7} + 3 == RationalDistance{25, 7},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{4, 7} / RationalNumber{2, 3} ==
-                  RationalNumber{12, 14},
+static_assert(RationalDistance{4, 7} / RationalDistance{2, 3} ==
+                  RationalDistance{12, 14},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{4, 7} / 2 == RationalNumber{4, 14},
+static_assert(RationalDistance{4, 7} / 2 == RationalDistance{4, 14},
               "rational number arithmetic error");
 
-static_assert(RationalNumber{19, 12} < RationalNumber{7, 3},
+static_assert(RationalDistance{19, 12} < RationalDistance{7, 3},
               "rational number comparison error");
 
-static_assert(RationalNumber{-1, 2} < RationalNumber{1, 3},
+static_assert(RationalDistance{-1, 2} < RationalDistance{1, 3},
               "rational number comparison error");
 
-static_assert(RationalNumber{-1, 2} < RationalNumber{1, -3},
+static_assert(RationalDistance{-1, 2} < RationalDistance{1, -3},
               "rational number comparison error");
 
-static_assert(RationalNumber{1, -2} < RationalNumber{-1, 3},
+static_assert(RationalDistance{1, -2} < RationalDistance{-1, 3},
               "rational number comparison error");
 
-static_assert(RationalNumber{1, -2} < RationalNumber{-1, -3},
+static_assert(RationalDistance{1, -2} < RationalDistance{-1, -3},
               "rational number comparison error");
 
-static_assert(RationalNumber{-1, -2} > RationalNumber{-1, -3},
+static_assert(RationalDistance{-1, -2} > RationalDistance{-1, -3},
               "rational number comparison error");
 
-static_assert(RationalNumber{2, 3} > RationalNumber{1, 4},
+static_assert(RationalDistance{2, 3} > RationalDistance{1, 4},
               "rational number comparison error");
 
-static_assert(RationalNumber{-2, 3} > -1, "rational number comparison error");
+static_assert(RationalDistance{-2, 3} > -1, "rational number comparison error");
 
-static_assert(RationalNumber{-2, 3} < 0, "rational number comparison error");
+static_assert(RationalDistance{-2, 3} < 0, "rational number comparison error");
 
-static_assert(RationalNumber{2, -3} < 0, "rational number comparison error");
+static_assert(RationalDistance{2, -3} < 0, "rational number comparison error");
 
-static_assert(RationalNumber{-2, -3} > 0, "rational number comparison error");
+static_assert(RationalDistance{-2, -3} > 0, "rational number comparison error");
 
-static_assert(RationalNumber{2, 3} > RationalNumber{1, 4},
+static_assert(RationalDistance{2, 3} > RationalDistance{1, 4},
               "rational number comparison error");
 
-static_assert(round(RationalNumber{19, 12}) == 2,
+static_assert(round(RationalDistance{19, 12}) == 2,
               "rational number round error");
 
-static_assert(round(RationalNumber{3, 7}) == 0, "rational number round error");
+static_assert(round(RationalDistance{3, 7}) == 0,
+              "rational number round error");
 
-static_assert(round(RationalNumber{-3, 7}) == 0, "rational number round error");
+static_assert(round(RationalDistance{-3, 7}) == 0,
+              "rational number round error");
 
-static_assert(round(RationalNumber{-4, 7}) == -1,
+static_assert(round(RationalDistance{-4, 7}) == -1,
               "rational number round error");
 
 enum class JumpState { grounded, started, released };
 
 struct Point {
-  int x;
-  int y;
+  distance_type x;
+  distance_type y;
 };
 
 struct Rectangle {
   Point origin;
-  int width;
-  int height;
+  distance_type width;
+  distance_type height;
 };
 
 struct Velocity {
-  RationalNumber vertical;
-  int horizontal;
+  RationalDistance vertical;
+  distance_type horizontal;
 };
 
 struct MovingObject {
@@ -216,8 +228,7 @@ struct MovingObject {
 };
 
 struct PlayerState {
-  Rectangle rectangle;
-  Velocity velocity;
+  MovingObject object;
   JumpState jumpState;
 };
 
@@ -225,7 +236,7 @@ constexpr auto operator-(Velocity a) -> Velocity {
   return {-a.vertical, -a.horizontal};
 }
 
-constexpr auto shiftHorizontally(Rectangle a, int b) -> Rectangle {
+constexpr auto shiftHorizontally(Rectangle a, distance_type b) -> Rectangle {
   a.origin.x += b;
   return a;
 }
@@ -239,19 +250,19 @@ constexpr auto applyVerticalVelocity(Rectangle a, Velocity b) -> Rectangle {
   return a;
 }
 
-constexpr auto topEdge(Rectangle a) -> int { return a.origin.y; }
+constexpr auto topEdge(Rectangle a) -> distance_type { return a.origin.y; }
 
-constexpr auto leftEdge(Rectangle a) -> int { return a.origin.x; }
+constexpr auto leftEdge(Rectangle a) -> distance_type { return a.origin.x; }
 
-constexpr auto rightEdge(Rectangle a) -> int {
+constexpr auto rightEdge(Rectangle a) -> distance_type {
   return a.origin.x + a.width - 1;
 }
 
-constexpr auto bottomEdge(Rectangle a) -> int {
+constexpr auto bottomEdge(Rectangle a) -> distance_type {
   return a.origin.y + a.height - 1;
 }
 
-constexpr auto operator*=(Rectangle &a, int scale) -> Rectangle & {
+constexpr auto operator*=(Rectangle &a, distance_type scale) -> Rectangle & {
   a.origin.x *= scale;
   a.origin.y *= scale;
   a.width *= scale;
@@ -259,25 +270,27 @@ constexpr auto operator*=(Rectangle &a, int scale) -> Rectangle & {
   return a;
 }
 
-constexpr auto operator*(Rectangle a, int scale) -> Rectangle {
+constexpr auto operator*(Rectangle a, distance_type scale) -> Rectangle {
   return a *= scale;
 }
 
 constexpr auto distanceFirstExceedsSecondVertically(Rectangle a, Rectangle b)
-    -> int {
+    -> distance_type {
   return bottomEdge(a) - topEdge(b);
 }
 
 constexpr auto distanceFirstExceedsSecondHorizontally(Rectangle a, Rectangle b)
-    -> int {
+    -> distance_type {
   return rightEdge(a) - leftEdge(b);
 }
 
-constexpr auto clamp(int velocity, int limit) -> int {
+constexpr auto clamp(distance_type velocity, distance_type limit)
+    -> distance_type {
   return std::clamp(velocity, -limit, limit);
 }
 
-constexpr auto withFriction(int velocity, int friction) -> int {
+constexpr auto withFriction(distance_type velocity, distance_type friction)
+    -> distance_type {
   return (isNegative(velocity) ? -1 : 1) *
          std::max(0, std::abs(velocity) - friction);
 }
@@ -286,14 +299,14 @@ class CollisionDirection {
 public:
   [[nodiscard]] virtual auto distanceSubjectPenetratesObject(Rectangle a,
                                                              Rectangle b) const
-      -> int = 0;
+      -> distance_type = 0;
 };
 
 class CollisionAxis {
 public:
   [[nodiscard]] virtual auto
   distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
-      -> int = 0;
+      -> distance_type = 0;
   [[nodiscard]] virtual auto applyVelocityNormalToSurface(Rectangle a,
                                                           Velocity b) const
       -> Rectangle = 0;
@@ -305,14 +318,14 @@ public:
   [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
       -> bool = 0;
   [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber = 0;
+      -> RationalDistance = 0;
 };
 
 class HorizontalCollision : public CollisionAxis {
 public:
   [[nodiscard]] auto
   distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondVertically(a, b);
   }
 
@@ -338,8 +351,8 @@ public:
   }
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{std::abs(a.horizontal), round(a.vertical)};
+      -> RationalDistance override {
+    return RationalDistance{std::abs(a.horizontal), round(a.vertical)};
   }
 };
 
@@ -347,7 +360,7 @@ class VerticalCollision : public CollisionAxis {
 public:
   [[nodiscard]] auto
   distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondHorizontally(a, b);
   }
 
@@ -373,8 +386,8 @@ public:
   }
 
   [[nodiscard]] auto surfaceRelativeSlope(Velocity a) const
-      -> RationalNumber override {
-    return RationalNumber{std::abs(round(a.vertical)), a.horizontal};
+      -> RationalDistance override {
+    return RationalDistance{std::abs(round(a.vertical)), a.horizontal};
   }
 };
 
@@ -383,7 +396,7 @@ public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
                                   Rectangle objectRectangle) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondVertically(subjectRectangle,
                                                 objectRectangle);
   }
@@ -394,7 +407,7 @@ public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
                                   Rectangle objectRectangle) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondVertically(objectRectangle,
                                                 subjectRectangle);
   }
@@ -405,7 +418,7 @@ public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
                                   Rectangle objectRectangle) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondHorizontally(subjectRectangle,
                                                   objectRectangle);
   }
@@ -416,7 +429,7 @@ public:
   [[nodiscard]] auto
   distanceSubjectPenetratesObject(Rectangle subjectRectangle,
                                   Rectangle objectRectangle) const
-      -> int override {
+      -> distance_type override {
     return distanceFirstExceedsSecondHorizontally(objectRectangle,
                                                   subjectRectangle);
   }
@@ -434,12 +447,12 @@ static auto subjectPassesThroughObjectTowardUpperBoundary(
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
              objectRectangle, subjectRectangle)) &&
          axis.surfaceRelativeSlope(subjectVelocity) >
-             RationalNumber{-(direction.distanceSubjectPenetratesObject(
-                                  subjectRectangle, objectRectangle) +
-                              1),
-                            axis.distanceFirstExceedsSecondParallelToSurface(
-                                objectRectangle, subjectRectangle) +
-                                1};
+             RationalDistance{-(direction.distanceSubjectPenetratesObject(
+                                    subjectRectangle, objectRectangle) +
+                                1),
+                              axis.distanceFirstExceedsSecondParallelToSurface(
+                                  objectRectangle, subjectRectangle) +
+                                  1};
 }
 
 static auto subjectPassesThroughObjectTowardLowerBoundary(
@@ -453,12 +466,12 @@ static auto subjectPassesThroughObjectTowardLowerBoundary(
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
              subjectRectangle, objectRectangle)) &&
          axis.surfaceRelativeSlope(subjectVelocity) <
-             RationalNumber{direction.distanceSubjectPenetratesObject(
-                                subjectRectangle, objectRectangle) +
-                                1,
-                            axis.distanceFirstExceedsSecondParallelToSurface(
-                                subjectRectangle, objectRectangle) +
-                                1};
+             RationalDistance{direction.distanceSubjectPenetratesObject(
+                                  subjectRectangle, objectRectangle) +
+                                  1,
+                              axis.distanceFirstExceedsSecondParallelToSurface(
+                                  subjectRectangle, objectRectangle) +
+                                  1};
 }
 
 static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
@@ -484,10 +497,11 @@ static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
   return true;
 }
 
-static auto onPlayerHitGround(PlayerState playerState, int ground)
+static auto onPlayerHitGround(PlayerState playerState, distance_type ground)
     -> PlayerState {
-  playerState.velocity.vertical = {0, 1};
-  playerState.rectangle.origin.y = ground - playerState.rectangle.height;
+  playerState.object.velocity.vertical = {0, 1};
+  playerState.object.rectangle.origin.y =
+      ground - playerState.object.rectangle.height;
   playerState.jumpState = JumpState::grounded;
   return playerState;
 }
@@ -513,18 +527,21 @@ static auto handleVerticalCollisions(
     const std::vector<Rectangle> &collisionFromAboveCandidates,
     const Rectangle &floorRectangle) -> PlayerState {
   for (const auto object : sortByTopEdge(collisionFromBelowCandidates))
-    if (passesThrough(playerState.rectangle, object, playerState.velocity,
-                      CollisionFromBelow{}, VerticalCollision{}))
+    if (passesThrough(playerState.object.rectangle, object,
+                      playerState.object.velocity, CollisionFromBelow{},
+                      VerticalCollision{}))
       return onPlayerHitGround(playerState, topEdge(object));
   if (isNonnegative(distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerState.rectangle, playerState.velocity),
+          applyVerticalVelocity(playerState.object.rectangle,
+                                playerState.object.velocity),
           floorRectangle)))
     return onPlayerHitGround(playerState, topEdge(floorRectangle));
   for (const auto object : sortByBottomEdge(collisionFromAboveCandidates))
-    if (passesThrough(playerState.rectangle, object, playerState.velocity,
-                      CollisionFromAbove{}, VerticalCollision{})) {
-      playerState.velocity.vertical = {0, 1};
-      playerState.rectangle.origin.y = bottomEdge(object) + 1;
+    if (passesThrough(playerState.object.rectangle, object,
+                      playerState.object.velocity, CollisionFromAbove{},
+                      VerticalCollision{})) {
+      playerState.object.velocity.vertical = {0, 1};
+      playerState.object.rectangle.origin.y = bottomEdge(object) + 1;
       return playerState;
     }
   return playerState;
@@ -584,9 +601,9 @@ static auto handleHorizontalCollisions(
 }
 
 static auto shiftBackground(Rectangle backgroundSourceRectangle,
-                            int backgroundSourceWidth,
-                            const Rectangle &playerRectangle, int cameraWidth)
-    -> Rectangle {
+                            distance_type backgroundSourceWidth,
+                            const Rectangle &playerRectangle,
+                            distance_type cameraWidth) -> Rectangle {
   const auto playerDistanceRightOfCameraCenter{
       leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
       leftEdge(backgroundSourceRectangle)};
@@ -597,7 +614,7 @@ static auto shiftBackground(Rectangle backgroundSourceRectangle,
     return shiftHorizontally(backgroundSourceRectangle,
                              std::min(distanceFromBackgroundRightEdgeToEnd,
                                       playerDistanceRightOfCameraCenter));
-  if (playerDistanceRightOfCameraCenter < 0 &&
+  if (isNegative(playerDistanceRightOfCameraCenter) &&
       leftEdge(backgroundSourceRectangle) > 0)
     return shiftHorizontally(backgroundSourceRectangle,
                              std::max(-leftEdge(backgroundSourceRectangle),
@@ -606,9 +623,10 @@ static auto shiftBackground(Rectangle backgroundSourceRectangle,
 }
 
 static auto applyVelocity(PlayerState playerState) -> PlayerState {
-  playerState.rectangle = applyVerticalVelocity(
-      applyHorizontalVelocity(playerState.rectangle, playerState.velocity),
-      playerState.velocity);
+  playerState.object.rectangle = applyVerticalVelocity(
+      applyHorizontalVelocity(playerState.object.rectangle,
+                              playerState.object.velocity),
+      playerState.object.velocity);
   return playerState;
 }
 } // namespace sbash64::game
@@ -733,35 +751,37 @@ static void initializeSDLImage() {
   }
 }
 
-static auto applyHorizontalForces(PlayerState playerState, int groundFriction,
-                                  int playerMaxHorizontalSpeed,
-                                  int playerRunAcceleration) -> PlayerState {
+static auto applyHorizontalForces(PlayerState playerState,
+                                  distance_type groundFriction,
+                                  distance_type playerMaxHorizontalSpeed,
+                                  distance_type playerRunAcceleration)
+    -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_LEFT))
-    playerState.velocity.horizontal -= playerRunAcceleration;
+    playerState.object.velocity.horizontal -= playerRunAcceleration;
   if (pressing(keyStates, SDL_SCANCODE_RIGHT))
-    playerState.velocity.horizontal += playerRunAcceleration;
-  playerState.velocity.horizontal = withFriction(
-      clamp(playerState.velocity.horizontal, playerMaxHorizontalSpeed),
+    playerState.object.velocity.horizontal += playerRunAcceleration;
+  playerState.object.velocity.horizontal = withFriction(
+      clamp(playerState.object.velocity.horizontal, playerMaxHorizontalSpeed),
       groundFriction);
   return playerState;
 }
 
 static auto applyVerticalForces(PlayerState playerState,
-                                int playerJumpAcceleration,
-                                RationalNumber gravity) -> PlayerState {
+                                distance_type playerJumpAcceleration,
+                                RationalDistance gravity) -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_UP) &&
       playerState.jumpState == JumpState::grounded) {
     playerState.jumpState = JumpState::started;
-    playerState.velocity.vertical += playerJumpAcceleration;
+    playerState.object.velocity.vertical += playerJumpAcceleration;
   }
-  playerState.velocity.vertical += gravity;
+  playerState.object.velocity.vertical += gravity;
   if (!pressing(keyStates, SDL_SCANCODE_UP) &&
       playerState.jumpState == JumpState::started) {
     playerState.jumpState = JumpState::released;
-    if (playerState.velocity.vertical < 0)
-      playerState.velocity.vertical = {0, 1};
+    if (playerState.object.velocity.vertical < 0)
+      playerState.object.velocity.vertical = {0, 1};
   }
   return playerState;
 }
@@ -819,15 +839,16 @@ static auto run(const std::string &playerImagePath,
                                  backgroundSourceWidth, 32};
   const Rectangle levelRectangle{Point{-1, -1}, backgroundSourceWidth + 1,
                                  cameraHeight + 1};
-  const RationalNumber gravity{1, 4};
+  const RationalDistance gravity{1, 4};
   const auto groundFriction{1};
   const auto playerMaxHorizontalSpeed{4};
   const auto playerJumpAcceleration{-6};
   const auto playerRunAcceleration{2};
   PlayerState playerState{
-      Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
-                playerHeight},
-      Velocity{{0, 1}, 0}, JumpState::grounded};
+      {Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
+                 playerHeight},
+       Velocity{{0, 1}, 0}},
+      JumpState::grounded};
   MovingObject enemy{{Point{140, topEdge(floorRectangle) - enemyHeight},
                       enemyWidth, enemyHeight},
                      Velocity{{0, 1}, 0}};
@@ -845,16 +866,14 @@ static auto run(const std::string &playerImagePath,
                                                   playerRunAcceleration),
                             playerJumpAcceleration, gravity),
         {blockRectangle, pipeRectangle}, {blockRectangle}, floorRectangle);
-    const auto playerMotion = handleHorizontalCollisions(
-        {playerState.rectangle, playerState.velocity},
+    playerState.object = handleHorizontalCollisions(
+        {playerState.object.rectangle, playerState.object.velocity},
         {blockRectangle, pipeRectangle}, {blockRectangle, pipeRectangle},
         levelRectangle);
-    playerState.rectangle = playerMotion.rectangle;
-    playerState.velocity = playerMotion.velocity;
     playerState = applyVelocity(playerState);
-    if (leftEdge(playerState.rectangle) < leftEdge(enemy.rectangle))
+    if (leftEdge(playerState.object.rectangle) < leftEdge(enemy.rectangle))
       enemy.velocity.horizontal = -1;
-    else if (leftEdge(playerState.rectangle) > leftEdge(enemy.rectangle))
+    else if (leftEdge(playerState.object.rectangle) > leftEdge(enemy.rectangle))
       enemy.velocity.horizontal = 1;
     else
       enemy.velocity.horizontal = 0;
@@ -863,7 +882,7 @@ static auto run(const std::string &playerImagePath,
     enemy.rectangle = applyHorizontalVelocity(enemy.rectangle, enemy.velocity);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
-                        playerState.rectangle, cameraWidth);
+                        playerState.object.rectangle, cameraWidth);
     present(rendererWrapper, backgroundTextureWrapper,
             backgroundSourceRectangle, pixelScale,
             {Point{0, 0}, cameraWidth, cameraHeight});
@@ -871,7 +890,7 @@ static auto run(const std::string &playerImagePath,
             shiftHorizontally(enemy.rectangle,
                               -leftEdge(backgroundSourceRectangle)));
     present(rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
-            shiftHorizontally(playerState.rectangle,
+            shiftHorizontally(playerState.object.rectangle,
                               -leftEdge(backgroundSourceRectangle)));
     SDL_RenderPresent(rendererWrapper.renderer);
   }
