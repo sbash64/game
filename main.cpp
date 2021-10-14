@@ -854,6 +854,8 @@ static auto run(const std::string &playerImagePath,
       enemy.velocity.horizontal = -1;
     else if (leftEdge(playerState.rectangle) > leftEdge(enemy.rectangle))
       enemy.velocity.horizontal = 1;
+    else
+      enemy.velocity.horizontal = 0;
     enemy = handleHorizontalCollisions(enemy, {pipeRectangle}, {pipeRectangle},
                                        levelRectangle);
     enemy.rectangle = applyHorizontalVelocity(enemy.rectangle, enemy.velocity);
