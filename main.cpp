@@ -835,9 +835,9 @@ static auto run(const std::string &playerImagePath,
       Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
                 playerHeight},
       Velocity{{0, 1}, 0}, JumpState::grounded};
-  const auto enemyHorizontalVelocity{1};
-  Rectangle enemyRectangle{Point{140, topEdge(floorRectangle) - enemyHeight},
-                           enemyWidth, enemyHeight};
+  MovingObject enemy{{Point{140, topEdge(floorRectangle) - enemyHeight},
+                      enemyWidth, enemyHeight},
+                     Velocity{{0, 1}, 1}};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
   const auto pipeHeight{40};
   const Rectangle pipeRectangle{
@@ -859,8 +859,12 @@ static auto run(const std::string &playerImagePath,
     playerState.rectangle = playerMotion.rectangle;
     playerState.velocity = playerMotion.velocity;
     playerState = applyVelocity(playerState);
-    enemyRectangle =
-        moveTowardPlayer(enemyRectangle, enemyHorizontalVelocity, playerState);
+    if (leftEdge(playerState.rectangle) < leftEdge(enemy.rectangle))
+      enemy.rectangle =
+          shiftHorizontally(enemy.rectangle, -enemy.velocity.horizontal);
+    else if (leftEdge(playerState.rectangle) > leftEdge(enemy.rectangle))
+      enemy.rectangle =
+          shiftHorizontally(enemy.rectangle, enemy.velocity.horizontal);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.rectangle, cameraWidth);
@@ -868,7 +872,7 @@ static auto run(const std::string &playerImagePath,
             backgroundSourceRectangle, pixelScale,
             {Point{0, 0}, cameraWidth, cameraHeight});
     present(rendererWrapper, enemyTextureWrapper, enemySourceRect, pixelScale,
-            shiftHorizontally(enemyRectangle,
+            shiftHorizontally(enemy.rectangle,
                               -leftEdge(backgroundSourceRectangle)));
     present(rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
             shiftHorizontally(playerState.rectangle,
