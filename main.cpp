@@ -609,15 +609,6 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
       playerState.velocity);
   return playerState;
 }
-
-static auto moveTowardPlayer(Rectangle subject, int horizontalVelocity,
-                             const PlayerState &playerState) -> Rectangle {
-  if (leftEdge(playerState.rectangle) < leftEdge(subject))
-    return shiftHorizontally(subject, -horizontalVelocity);
-  if (leftEdge(playerState.rectangle) > leftEdge(subject))
-    return shiftHorizontally(subject, horizontalVelocity);
-  return subject;
-}
 } // namespace sbash64::game
 
 namespace sbash64::game {
@@ -837,7 +828,7 @@ static auto run(const std::string &playerImagePath,
       Velocity{{0, 1}, 0}, JumpState::grounded};
   MovingObject enemy{{Point{140, topEdge(floorRectangle) - enemyHeight},
                       enemyWidth, enemyHeight},
-                     Velocity{{0, 1}, 1}};
+                     Velocity{{0, 1}, 0}};
   const Rectangle blockRectangle{Point{256, 144}, 15, 15};
   const auto pipeHeight{40};
   const Rectangle pipeRectangle{
@@ -860,11 +851,10 @@ static auto run(const std::string &playerImagePath,
     playerState.velocity = playerMotion.velocity;
     playerState = applyVelocity(playerState);
     if (leftEdge(playerState.rectangle) < leftEdge(enemy.rectangle))
-      enemy.rectangle =
-          shiftHorizontally(enemy.rectangle, -enemy.velocity.horizontal);
+      enemy.velocity.horizontal = -1;
     else if (leftEdge(playerState.rectangle) > leftEdge(enemy.rectangle))
-      enemy.rectangle =
-          shiftHorizontally(enemy.rectangle, enemy.velocity.horizontal);
+      enemy.velocity.horizontal = 1;
+    enemy.rectangle = applyHorizontalVelocity(enemy.rectangle, enemy.velocity);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.rectangle, cameraWidth);
