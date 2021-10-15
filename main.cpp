@@ -1,13 +1,3 @@
-#include <SDL.h>
-#include <SDL_events.h>
-#include <SDL_hints.h>
-#include <SDL_image.h>
-#include <SDL_pixels.h>
-#include <SDL_render.h>
-#include <SDL_scancode.h>
-#include <SDL_stdinc.h>
-#include <SDL_surface.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -38,8 +28,8 @@ constexpr auto operator+=(RationalDistance &a, RationalDistance b)
     -> RationalDistance & {
   const auto smallerDenominator{std::min(a.denominator, b.denominator)};
   const auto largerDenominator{std::max(a.denominator, b.denominator)};
-  auto commonDenominator = smallerDenominator;
-  auto candidateDenominator = largerDenominator;
+  auto commonDenominator{smallerDenominator};
+  auto candidateDenominator{largerDenominator};
   while (true) {
     while (
         commonDenominator <
@@ -506,6 +496,13 @@ static auto onPlayerHitGround(PlayerState playerState, distance_type ground)
   return playerState;
 }
 
+static auto collideHorizontally(MovingObject object, distance_type leftEdge)
+    -> MovingObject {
+  object.velocity.horizontal = 0;
+  object.rectangle.origin.x = leftEdge;
+  return object;
+}
+
 static auto sortByTopEdge(std::vector<Rectangle> objects)
     -> std::vector<Rectangle> {
   std::sort(objects.begin(), objects.end(),
@@ -569,34 +566,23 @@ static auto handleHorizontalCollisions(
     const Rectangle &levelRectangle) -> MovingObject {
   for (const auto candidate : sortByLeftEdge(collisionFromRightCandidates))
     if (passesThrough(object.rectangle, candidate, object.velocity,
-                      CollisionFromRight{}, HorizontalCollision{})) {
-      object.velocity.horizontal = 0;
-      object.rectangle.origin.x = leftEdge(candidate) - object.rectangle.width;
-      return object;
-    }
+                      CollisionFromRight{}, HorizontalCollision{}))
+      return collideHorizontally(object,
+                                 leftEdge(candidate) - object.rectangle.width);
   if (isNonnegative(rightEdge(applyHorizontalVelocity(object.rectangle,
                                                       object.velocity)) -
-                    rightEdge(levelRectangle))) {
-    object.velocity.horizontal = 0;
-    object.rectangle.origin.x =
-        rightEdge(levelRectangle) - object.rectangle.width;
-    return object;
-  }
+                    rightEdge(levelRectangle)))
+    return collideHorizontally(object, rightEdge(levelRectangle) -
+                                           object.rectangle.width);
 
   for (const auto candidate : sortByRightEdge(collisionFromLeftCandidates))
     if (passesThrough(object.rectangle, candidate, object.velocity,
-                      CollisionFromLeft{}, HorizontalCollision{})) {
-      object.velocity.horizontal = 0;
-      object.rectangle.origin.x = rightEdge(candidate) + 1;
-      return object;
-    }
-  if (isNonnegative(leftEdge(levelRectangle) -
-                    leftEdge(applyHorizontalVelocity(object.rectangle,
-                                                     object.velocity)))) {
-    object.velocity.horizontal = 0;
-    object.rectangle.origin.x = leftEdge(levelRectangle) + 1;
-    return object;
-  }
+                      CollisionFromLeft{}, HorizontalCollision{}))
+      return collideHorizontally(object, rightEdge(candidate) + 1);
+  if (isNonnegative(
+          leftEdge(levelRectangle) -
+          leftEdge(applyHorizontalVelocity(object.rectangle, object.velocity))))
+    return collideHorizontally(object, leftEdge(levelRectangle) + 1);
   return object;
 }
 
@@ -631,7 +617,16 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
 }
 } // namespace sbash64::game
 
-namespace sbash64::game {
+#include <SDL.h>
+#include <SDL_events.h>
+#include <SDL_hints.h>
+#include <SDL_image.h>
+#include <SDL_pixels.h>
+#include <SDL_render.h>
+#include <SDL_scancode.h>
+#include <SDL_stdinc.h>
+#include <SDL_surface.h>
+
 // https://stackoverflow.com/a/53067795
 static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
   const auto bpp{surface->format->BytesPerPixel};
@@ -655,6 +650,7 @@ static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
   }
 }
 
+namespace sbash64::game {
 [[noreturn]] static void throwRuntimeError(std::string_view message) {
   std::stringstream stream;
   stream << message << " SDL_Error: " << SDL_GetError();
