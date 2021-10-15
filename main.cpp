@@ -231,13 +231,13 @@ constexpr auto shiftHorizontally(Rectangle a, distance_type b) -> Rectangle {
   return a;
 }
 
-constexpr auto applyHorizontalVelocity(Rectangle a, Velocity b) -> Rectangle {
-  return shiftHorizontally(a, b.horizontal);
+constexpr auto applyHorizontalVelocity(MovingObject a) -> Rectangle {
+  return shiftHorizontally(a.rectangle, a.velocity.horizontal);
 }
 
-constexpr auto applyVerticalVelocity(Rectangle a, Velocity b) -> Rectangle {
-  a.origin.y += round(b.vertical);
-  return a;
+constexpr auto applyVerticalVelocity(MovingObject a) -> Rectangle {
+  a.rectangle.origin.y += round(a.velocity.vertical);
+  return a.rectangle;
 }
 
 constexpr auto topEdge(Rectangle a) -> distance_type { return a.origin.y; }
@@ -287,8 +287,8 @@ constexpr auto withFriction(distance_type velocity, distance_type friction)
 
 class CollisionDirection {
 public:
-  [[nodiscard]] virtual auto distanceSubjectPenetratesObject(MovingObject a,
-                                                             Rectangle b) const
+  [[nodiscard]] virtual auto distancePenetrates(MovingObject a,
+                                                Rectangle b) const
       -> distance_type = 0;
 };
 
@@ -319,13 +319,13 @@ public:
 
   [[nodiscard]] auto applyVelocityNormalToSurface(MovingObject a) const
       -> MovingObject override {
-    a.rectangle = applyHorizontalVelocity(a.rectangle, a.velocity);
+    a.rectangle = applyHorizontalVelocity(a);
     return a;
   }
 
   [[nodiscard]] auto applyVelocityParallelToSurface(MovingObject a) const
       -> MovingObject override {
-    a.rectangle = applyVerticalVelocity(a.rectangle, a.velocity);
+    a.rectangle = applyVerticalVelocity(a);
     return a;
   }
 
@@ -355,13 +355,13 @@ public:
 
   [[nodiscard]] auto applyVelocityNormalToSurface(MovingObject a) const
       -> MovingObject override {
-    a.rectangle = applyVerticalVelocity(a.rectangle, a.velocity);
+    a.rectangle = applyVerticalVelocity(a);
     return a;
   }
 
   [[nodiscard]] auto applyVelocityParallelToSurface(MovingObject a) const
       -> MovingObject override {
-    a.rectangle = applyHorizontalVelocity(a.rectangle, a.velocity);
+    a.rectangle = applyHorizontalVelocity(a);
     return a;
   }
 
@@ -384,44 +384,44 @@ public:
 class CollisionFromBelow : public CollisionDirection {
 public:
   [[nodiscard]] auto
-  distanceSubjectPenetratesObject(MovingObject subjectRectangle,
-                                  Rectangle objectRectangle) const
+  distancePenetrates(MovingObject movingObject,
+                     Rectangle stationaryObjectRectangle) const
       -> distance_type override {
-    return distanceFirstExceedsSecondVertically(subjectRectangle.rectangle,
-                                                objectRectangle);
+    return distanceFirstExceedsSecondVertically(movingObject.rectangle,
+                                                stationaryObjectRectangle);
   }
 };
 
 class CollisionFromAbove : public CollisionDirection {
 public:
   [[nodiscard]] auto
-  distanceSubjectPenetratesObject(MovingObject subjectRectangle,
-                                  Rectangle objectRectangle) const
+  distancePenetrates(MovingObject movingObject,
+                     Rectangle stationaryObjectRectangle) const
       -> distance_type override {
-    return distanceFirstExceedsSecondVertically(objectRectangle,
-                                                subjectRectangle.rectangle);
+    return distanceFirstExceedsSecondVertically(stationaryObjectRectangle,
+                                                movingObject.rectangle);
   }
 };
 
 class CollisionFromRight : public CollisionDirection {
 public:
   [[nodiscard]] auto
-  distanceSubjectPenetratesObject(MovingObject subjectRectangle,
-                                  Rectangle objectRectangle) const
+  distancePenetrates(MovingObject movingObject,
+                     Rectangle stationaryObjectRectangle) const
       -> distance_type override {
-    return distanceFirstExceedsSecondHorizontally(subjectRectangle.rectangle,
-                                                  objectRectangle);
+    return distanceFirstExceedsSecondHorizontally(movingObject.rectangle,
+                                                  stationaryObjectRectangle);
   }
 };
 
 class CollisionFromLeft : public CollisionDirection {
 public:
   [[nodiscard]] auto
-  distanceSubjectPenetratesObject(MovingObject subjectRectangle,
-                                  Rectangle objectRectangle) const
+  distancePenetrates(MovingObject movingObject,
+                     Rectangle stationaryObjectRectangle) const
       -> distance_type override {
-    return distanceFirstExceedsSecondHorizontally(objectRectangle,
-                                                  subjectRectangle.rectangle);
+    return distanceFirstExceedsSecondHorizontally(stationaryObjectRectangle,
+                                                  movingObject.rectangle);
   }
 };
 
@@ -436,8 +436,8 @@ static auto passesThroughTowardUpperBoundary(
              stationaryObjectRectangle, movingObject.rectangle)) &&
          axis.surfaceRelativeSlope(movingObject.velocity) >
              RationalDistance{
-                 -(direction.distanceSubjectPenetratesObject(
-                       movingObject, stationaryObjectRectangle) +
+                 -(direction.distancePenetrates(movingObject,
+                                                stationaryObjectRectangle) +
                    1),
                  axis.distanceFirstExceedsSecondParallelToSurface(
                      stationaryObjectRectangle, movingObject.rectangle) +
@@ -455,8 +455,8 @@ static auto passesThroughTowardLowerBoundary(
              movingObject.rectangle, stationaryObjectRectangle)) &&
          axis.surfaceRelativeSlope(movingObject.velocity) <
              RationalDistance{
-                 direction.distanceSubjectPenetratesObject(
-                     movingObject, stationaryObjectRectangle) +
+                 direction.distancePenetrates(movingObject,
+                                              stationaryObjectRectangle) +
                      1,
                  axis.distanceFirstExceedsSecondParallelToSurface(
                      movingObject.rectangle, stationaryObjectRectangle) +
@@ -467,9 +467,9 @@ static auto passesThrough(MovingObject movingObject,
                           Rectangle stationaryObjectRectangle,
                           const CollisionDirection &direction,
                           const CollisionAxis &axis) -> bool {
-  if (isNonnegative(direction.distanceSubjectPenetratesObject(
-          movingObject, stationaryObjectRectangle)) ||
-      isNegative(direction.distanceSubjectPenetratesObject(
+  if (isNonnegative(direction.distancePenetrates(movingObject,
+                                                 stationaryObjectRectangle)) ||
+      isNegative(direction.distancePenetrates(
           axis.applyVelocityNormalToSurface(movingObject),
           stationaryObjectRectangle)))
     return false;
@@ -532,9 +532,7 @@ static auto handleVerticalCollisions(
                       VerticalCollision{}))
       return onPlayerHitGround(playerState, topEdge(candidate));
   if (isNonnegative(distanceFirstExceedsSecondVertically(
-          applyVerticalVelocity(playerState.object.rectangle,
-                                playerState.object.velocity),
-          floorRectangle)))
+          applyVerticalVelocity(playerState.object), floorRectangle)))
     return onPlayerHitGround(playerState, topEdge(floorRectangle));
   for (const auto object : sortByBottomEdge(collisionFromAboveCandidates))
     if (passesThrough(playerState.object, object, CollisionFromAbove{},
@@ -571,8 +569,7 @@ static auto handleHorizontalCollisions(
                       HorizontalCollision{}))
       return collideHorizontally(object,
                                  leftEdge(candidate) - object.rectangle.width);
-  if (isNonnegative(rightEdge(applyHorizontalVelocity(object.rectangle,
-                                                      object.velocity)) -
+  if (isNonnegative(rightEdge(applyHorizontalVelocity(object)) -
                     rightEdge(levelRectangle)))
     return collideHorizontally(object, rightEdge(levelRectangle) -
                                            object.rectangle.width);
@@ -581,9 +578,8 @@ static auto handleHorizontalCollisions(
     if (passesThrough(object, candidate, CollisionFromLeft{},
                       HorizontalCollision{}))
       return collideHorizontally(object, rightEdge(candidate) + 1);
-  if (isNonnegative(
-          leftEdge(levelRectangle) -
-          leftEdge(applyHorizontalVelocity(object.rectangle, object.velocity))))
+  if (isNonnegative(leftEdge(levelRectangle) -
+                    leftEdge(applyHorizontalVelocity(object))))
     return collideHorizontally(object, leftEdge(levelRectangle) + 1);
   return object;
 }
@@ -611,9 +607,8 @@ static auto shiftBackground(Rectangle backgroundSourceRectangle,
 }
 
 static auto applyVelocity(MovingObject object) -> MovingObject {
-  object.rectangle = applyVerticalVelocity(
-      applyHorizontalVelocity(object.rectangle, object.velocity),
-      object.velocity);
+  object.rectangle =
+      applyVerticalVelocity({applyHorizontalVelocity(object), object.velocity});
   return object;
 }
 
@@ -881,7 +876,7 @@ static auto run(const std::string &playerImagePath,
       enemy.velocity.horizontal = 0;
     enemy = handleHorizontalCollisions(enemy, {pipeRectangle}, {pipeRectangle},
                                        levelRectangle);
-    enemy.rectangle = applyHorizontalVelocity(enemy.rectangle, enemy.velocity);
+    enemy.rectangle = applyHorizontalVelocity(enemy);
     backgroundSourceRectangle =
         shiftBackground(backgroundSourceRectangle, backgroundSourceWidth,
                         playerState.object.rectangle, cameraWidth);
