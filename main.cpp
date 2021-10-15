@@ -425,67 +425,67 @@ public:
   }
 };
 
-static auto subjectPassesThroughObjectTowardUpperBoundary(
-    Rectangle &subjectRectangle, Rectangle &objectRectangle,
-    Velocity &subjectVelocity, const CollisionDirection &direction,
-    const CollisionAxis &axis) -> bool {
-  return axis.headingTowardUpperBoundary(subjectVelocity) &&
+static auto passesThroughTowardUpperBoundary(
+    MovingObject movingObject, Rectangle stationaryObjectRectangle,
+    const CollisionDirection &direction, const CollisionAxis &axis) -> bool {
+  return axis.headingTowardUpperBoundary(movingObject.velocity) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-             axis.applyVelocityParallelToSurface(subjectRectangle,
-                                                 subjectVelocity),
-             objectRectangle)) &&
+             axis.applyVelocityParallelToSurface(movingObject.rectangle,
+                                                 movingObject.velocity),
+             stationaryObjectRectangle)) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-             objectRectangle, subjectRectangle)) &&
-         axis.surfaceRelativeSlope(subjectVelocity) >
-             RationalDistance{-(direction.distanceSubjectPenetratesObject(
-                                    subjectRectangle, objectRectangle) +
-                                1),
-                              axis.distanceFirstExceedsSecondParallelToSurface(
-                                  objectRectangle, subjectRectangle) +
-                                  1};
+             stationaryObjectRectangle, movingObject.rectangle)) &&
+         axis.surfaceRelativeSlope(movingObject.velocity) >
+             RationalDistance{
+                 -(direction.distanceSubjectPenetratesObject(
+                       movingObject.rectangle, stationaryObjectRectangle) +
+                   1),
+                 axis.distanceFirstExceedsSecondParallelToSurface(
+                     stationaryObjectRectangle, movingObject.rectangle) +
+                     1};
 }
 
-static auto subjectPassesThroughObjectTowardLowerBoundary(
-    Rectangle &subjectRectangle, Rectangle &objectRectangle,
-    Velocity &subjectVelocity, const CollisionDirection &direction,
-    const CollisionAxis &axis) -> bool {
-  return axis.headingTowardLowerBoundary(subjectVelocity) &&
+static auto passesThroughTowardLowerBoundary(
+    MovingObject movingObject, Rectangle stationaryObjectRectangle,
+    const CollisionDirection &direction, const CollisionAxis &axis) -> bool {
+  return axis.headingTowardLowerBoundary(movingObject.velocity) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-             objectRectangle, axis.applyVelocityParallelToSurface(
-                                  subjectRectangle, subjectVelocity))) &&
+             stationaryObjectRectangle,
+             axis.applyVelocityParallelToSurface(movingObject.rectangle,
+                                                 movingObject.velocity))) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-             subjectRectangle, objectRectangle)) &&
-         axis.surfaceRelativeSlope(subjectVelocity) <
-             RationalDistance{direction.distanceSubjectPenetratesObject(
-                                  subjectRectangle, objectRectangle) +
-                                  1,
-                              axis.distanceFirstExceedsSecondParallelToSurface(
-                                  subjectRectangle, objectRectangle) +
-                                  1};
+             movingObject.rectangle, stationaryObjectRectangle)) &&
+         axis.surfaceRelativeSlope(movingObject.velocity) <
+             RationalDistance{
+                 direction.distanceSubjectPenetratesObject(
+                     movingObject.rectangle, stationaryObjectRectangle) +
+                     1,
+                 axis.distanceFirstExceedsSecondParallelToSurface(
+                     movingObject.rectangle, stationaryObjectRectangle) +
+                     1};
 }
 
-static auto passesThrough(MovingObject movingObject, Rectangle stationaryObject,
+static auto passesThrough(MovingObject movingObject,
+                          Rectangle stationaryObjectRectangle,
                           const CollisionDirection &direction,
                           const CollisionAxis &axis) -> bool {
   if (isNonnegative(direction.distanceSubjectPenetratesObject(
-          movingObject.rectangle, stationaryObject)) ||
+          movingObject.rectangle, stationaryObjectRectangle)) ||
       isNegative(direction.distanceSubjectPenetratesObject(
           axis.applyVelocityNormalToSurface(movingObject.rectangle,
                                             movingObject.velocity),
-          stationaryObject)))
+          stationaryObjectRectangle)))
     return false;
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          movingObject.rectangle, stationaryObject)) ||
+          movingObject.rectangle, stationaryObjectRectangle)) ||
       axis.headingTowardUpperBoundary(movingObject.velocity))
-    return subjectPassesThroughObjectTowardUpperBoundary(
-        movingObject.rectangle, stationaryObject, movingObject.velocity,
-        direction, axis);
+    return passesThroughTowardUpperBoundary(
+        movingObject, stationaryObjectRectangle, direction, axis);
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          stationaryObject, movingObject.rectangle)) ||
+          stationaryObjectRectangle, movingObject.rectangle)) ||
       axis.headingTowardLowerBoundary(movingObject.velocity))
-    return subjectPassesThroughObjectTowardLowerBoundary(
-        movingObject.rectangle, stationaryObject, movingObject.velocity,
-        direction, axis);
+    return passesThroughTowardLowerBoundary(
+        movingObject, stationaryObjectRectangle, direction, axis);
   return true;
 }
 
