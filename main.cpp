@@ -464,34 +464,41 @@ static auto subjectPassesThroughObjectTowardLowerBoundary(
                                   1};
 }
 
-static auto passesThrough(Rectangle subjectRectangle, Rectangle objectRectangle,
-                          Velocity subjectVelocity,
+static auto passesThrough(MovingObject movingObject, Rectangle stationaryObject,
                           const CollisionDirection &direction,
                           const CollisionAxis &axis) -> bool {
   if (isNonnegative(direction.distanceSubjectPenetratesObject(
-          subjectRectangle, objectRectangle)) ||
+          movingObject.rectangle, stationaryObject)) ||
       isNegative(direction.distanceSubjectPenetratesObject(
-          axis.applyVelocityNormalToSurface(subjectRectangle, subjectVelocity),
-          objectRectangle)))
+          axis.applyVelocityNormalToSurface(movingObject.rectangle,
+                                            movingObject.velocity),
+          stationaryObject)))
     return false;
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          subjectRectangle, objectRectangle)) ||
-      axis.headingTowardUpperBoundary(subjectVelocity))
+          movingObject.rectangle, stationaryObject)) ||
+      axis.headingTowardUpperBoundary(movingObject.velocity))
     return subjectPassesThroughObjectTowardUpperBoundary(
-        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
+        movingObject.rectangle, stationaryObject, movingObject.velocity,
+        direction, axis);
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
-          objectRectangle, subjectRectangle)) ||
-      axis.headingTowardLowerBoundary(subjectVelocity))
+          stationaryObject, movingObject.rectangle)) ||
+      axis.headingTowardLowerBoundary(movingObject.velocity))
     return subjectPassesThroughObjectTowardLowerBoundary(
-        subjectRectangle, objectRectangle, subjectVelocity, direction, axis);
+        movingObject.rectangle, stationaryObject, movingObject.velocity,
+        direction, axis);
   return true;
+}
+
+static auto collideVertically(MovingObject object, distance_type ground)
+    -> MovingObject {
+  object.velocity.vertical = {0, 1};
+  object.rectangle.origin.y = ground - object.rectangle.height;
+  return object;
 }
 
 static auto onPlayerHitGround(PlayerState playerState, distance_type ground)
     -> PlayerState {
-  playerState.object.velocity.vertical = {0, 1};
-  playerState.object.rectangle.origin.y =
-      ground - playerState.object.rectangle.height;
+  playerState.object = collideVertically(playerState.object, ground);
   playerState.jumpState = JumpState::grounded;
   return playerState;
 }
@@ -523,19 +530,17 @@ static auto handleVerticalCollisions(
     const std::vector<Rectangle> &collisionFromBelowCandidates,
     const std::vector<Rectangle> &collisionFromAboveCandidates,
     const Rectangle &floorRectangle) -> PlayerState {
-  for (const auto object : sortByTopEdge(collisionFromBelowCandidates))
-    if (passesThrough(playerState.object.rectangle, object,
-                      playerState.object.velocity, CollisionFromBelow{},
+  for (const auto candidate : sortByTopEdge(collisionFromBelowCandidates))
+    if (passesThrough(playerState.object, candidate, CollisionFromBelow{},
                       VerticalCollision{}))
-      return onPlayerHitGround(playerState, topEdge(object));
+      return onPlayerHitGround(playerState, topEdge(candidate));
   if (isNonnegative(distanceFirstExceedsSecondVertically(
           applyVerticalVelocity(playerState.object.rectangle,
                                 playerState.object.velocity),
           floorRectangle)))
     return onPlayerHitGround(playerState, topEdge(floorRectangle));
   for (const auto object : sortByBottomEdge(collisionFromAboveCandidates))
-    if (passesThrough(playerState.object.rectangle, object,
-                      playerState.object.velocity, CollisionFromAbove{},
+    if (passesThrough(playerState.object, object, CollisionFromAbove{},
                       VerticalCollision{})) {
       playerState.object.velocity.vertical = {0, 1};
       playerState.object.rectangle.origin.y = bottomEdge(object) + 1;
@@ -565,8 +570,8 @@ static auto handleHorizontalCollisions(
     const std::vector<Rectangle> &collisionFromLeftCandidates,
     const Rectangle &levelRectangle) -> MovingObject {
   for (const auto candidate : sortByLeftEdge(collisionFromRightCandidates))
-    if (passesThrough(object.rectangle, candidate, object.velocity,
-                      CollisionFromRight{}, HorizontalCollision{}))
+    if (passesThrough(object, candidate, CollisionFromRight{},
+                      HorizontalCollision{}))
       return collideHorizontally(object,
                                  leftEdge(candidate) - object.rectangle.width);
   if (isNonnegative(rightEdge(applyHorizontalVelocity(object.rectangle,
@@ -576,8 +581,8 @@ static auto handleHorizontalCollisions(
                                            object.rectangle.width);
 
   for (const auto candidate : sortByRightEdge(collisionFromLeftCandidates))
-    if (passesThrough(object.rectangle, candidate, object.velocity,
-                      CollisionFromLeft{}, HorizontalCollision{}))
+    if (passesThrough(object, candidate, CollisionFromLeft{},
+                      HorizontalCollision{}))
       return collideHorizontally(object, rightEdge(candidate) + 1);
   if (isNonnegative(
           leftEdge(levelRectangle) -
@@ -608,11 +613,15 @@ static auto shiftBackground(Rectangle backgroundSourceRectangle,
   return backgroundSourceRectangle;
 }
 
+static auto applyVelocity(MovingObject object) -> MovingObject {
+  object.rectangle = applyVerticalVelocity(
+      applyHorizontalVelocity(object.rectangle, object.velocity),
+      object.velocity);
+  return object;
+}
+
 static auto applyVelocity(PlayerState playerState) -> PlayerState {
-  playerState.object.rectangle = applyVerticalVelocity(
-      applyHorizontalVelocity(playerState.object.rectangle,
-                              playerState.object.velocity),
-      playerState.object.velocity);
+  playerState.object = applyVelocity(playerState.object);
   return playerState;
 }
 } // namespace sbash64::game
