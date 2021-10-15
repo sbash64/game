@@ -287,25 +287,24 @@ constexpr auto withFriction(distance_type velocity, distance_type friction)
 
 class CollisionDirection {
 public:
-  [[nodiscard]] virtual auto distancePenetrates(MovingObject a,
-                                                Rectangle b) const
+  [[nodiscard]] virtual auto distancePenetrates(MovingObject, Rectangle) const
       -> distance_type = 0;
 };
 
 class CollisionAxis {
 public:
   [[nodiscard]] virtual auto
-  distanceFirstExceedsSecondParallelToSurface(Rectangle a, Rectangle b) const
+      distanceFirstExceedsSecondParallelToSurface(Rectangle, Rectangle) const
       -> distance_type = 0;
   [[nodiscard]] virtual auto applyVelocityNormalToSurface(MovingObject) const
-      -> MovingObject = 0;
+      -> Rectangle = 0;
   [[nodiscard]] virtual auto applyVelocityParallelToSurface(MovingObject) const
-      -> MovingObject = 0;
-  [[nodiscard]] virtual auto headingTowardUpperBoundary(Velocity a) const
+      -> Rectangle = 0;
+  [[nodiscard]] virtual auto headingTowardUpperBoundary(Velocity) const
       -> bool = 0;
-  [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity a) const
+  [[nodiscard]] virtual auto headingTowardLowerBoundary(Velocity) const
       -> bool = 0;
-  [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity a) const
+  [[nodiscard]] virtual auto surfaceRelativeSlope(Velocity) const
       -> RationalDistance = 0;
 };
 
@@ -318,15 +317,13 @@ public:
   }
 
   [[nodiscard]] auto applyVelocityNormalToSurface(MovingObject a) const
-      -> MovingObject override {
-    a.rectangle = applyHorizontalVelocity(a);
-    return a;
+      -> Rectangle override {
+    return applyHorizontalVelocity(a);
   }
 
   [[nodiscard]] auto applyVelocityParallelToSurface(MovingObject a) const
-      -> MovingObject override {
-    a.rectangle = applyVerticalVelocity(a);
-    return a;
+      -> Rectangle override {
+    return applyVerticalVelocity(a);
   }
 
   [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
@@ -354,15 +351,13 @@ public:
   }
 
   [[nodiscard]] auto applyVelocityNormalToSurface(MovingObject a) const
-      -> MovingObject override {
-    a.rectangle = applyVerticalVelocity(a);
-    return a;
+      -> Rectangle override {
+    return applyVerticalVelocity(a);
   }
 
   [[nodiscard]] auto applyVelocityParallelToSurface(MovingObject a) const
-      -> MovingObject override {
-    a.rectangle = applyHorizontalVelocity(a);
-    return a;
+      -> Rectangle override {
+    return applyHorizontalVelocity(a);
   }
 
   [[nodiscard]] auto headingTowardUpperBoundary(Velocity a) const
@@ -430,7 +425,7 @@ static auto passesThroughTowardUpperBoundary(
     const CollisionDirection &direction, const CollisionAxis &axis) -> bool {
   return axis.headingTowardUpperBoundary(movingObject.velocity) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
-             axis.applyVelocityParallelToSurface(movingObject).rectangle,
+             axis.applyVelocityParallelToSurface(movingObject),
              stationaryObjectRectangle)) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
              stationaryObjectRectangle, movingObject.rectangle)) &&
@@ -450,7 +445,7 @@ static auto passesThroughTowardLowerBoundary(
   return axis.headingTowardLowerBoundary(movingObject.velocity) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
              stationaryObjectRectangle,
-             axis.applyVelocityParallelToSurface(movingObject).rectangle)) &&
+             axis.applyVelocityParallelToSurface(movingObject))) &&
          isNonnegative(axis.distanceFirstExceedsSecondParallelToSurface(
              movingObject.rectangle, stationaryObjectRectangle)) &&
          axis.surfaceRelativeSlope(movingObject.velocity) <
@@ -470,7 +465,8 @@ static auto passesThrough(MovingObject movingObject,
   if (isNonnegative(direction.distancePenetrates(movingObject,
                                                  stationaryObjectRectangle)) ||
       isNegative(direction.distancePenetrates(
-          axis.applyVelocityNormalToSurface(movingObject),
+          {axis.applyVelocityNormalToSurface(movingObject),
+           movingObject.velocity},
           stationaryObjectRectangle)))
     return false;
   if (isNegative(axis.distanceFirstExceedsSecondParallelToSurface(
