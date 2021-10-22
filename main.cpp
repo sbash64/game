@@ -1,6 +1,9 @@
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -8,6 +11,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace sbash64::game {
@@ -614,6 +618,88 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
 }
 } // namespace sbash64::game
 
+#include <asoundlib.h>
+// #include <poll.h>
+
+namespace sbash64::game {
+[[noreturn]] static void throwAlsaRuntimeError(std::string_view message,
+                                               int error) {
+  std::stringstream stream;
+  stream << message << ": " << snd_strerror(error);
+  throw std::runtime_error{stream.str()};
+}
+
+static void async_direct_callback(snd_async_handler_t *ahandler) {
+  snd_pcm_t *handle = snd_async_handler_get_pcm(ahandler);
+
+  while (true) {
+    const auto state = snd_pcm_state(handle);
+    if (state == SND_PCM_STATE_XRUN) {
+    } else if (state == SND_PCM_STATE_SUSPENDED) {
+    }
+    if (snd_pcm_avail_update(handle) >= 0) {
+      break;
+    }
+  }
+
+  snd_pcm_uframes_t frames = 0;
+  snd_pcm_uframes_t offset = 0;
+  const snd_pcm_channel_area_t *channelAreas = nullptr;
+  const auto err = snd_pcm_mmap_begin(handle, &channelAreas, &offset, &frames);
+  if (err < 0) {
+  }
+
+  const auto channels{1};
+  auto bitsPerSample = 16;
+  auto bytesPerSample = bitsPerSample / 8;
+  auto phys_bps = snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) / 8;
+
+  for (auto channel = 0; channel < channels; channel++) {
+    if ((channelAreas[channel].first % 8) != 0) {
+    }
+    if ((channelAreas[channel].step % 16) != 0) {
+    }
+  }
+
+  for (snd_pcm_uframes_t frameCounter{0}; frameCounter < frames;
+       ++frameCounter) {
+    for (auto channel = 0; channel < channels; channel++) {
+      auto *data = static_cast<unsigned char *>(channelAreas[channel].addr) +
+                   channelAreas[channel].first / 8 +
+                   (offset + frameCounter) * channelAreas[channel].step / 8;
+      auto sample = 0;
+      if (snd_pcm_format_big_endian(SND_PCM_FORMAT_S16) == 1)
+        for (auto i = 0; i < bytesPerSample; i++)
+          *(data + phys_bps - 1 - i) = (sample >> i * 8) & 0xff;
+      else
+        for (auto i = 0; i < bytesPerSample; i++)
+          *(data + i) = (sample >> i * 8) & 0xff;
+    }
+  }
+
+  const auto commitres = snd_pcm_mmap_commit(handle, offset, frames);
+  if (commitres < 0 || commitres != frames) {
+  }
+}
+
+namespace alsa_wrappers {
+namespace {
+struct PCM {
+  PCM() {
+    if (const auto error{
+            snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0)};
+        error < 0)
+      throwAlsaRuntimeError("playback open error", error);
+  }
+
+  ~PCM() { snd_pcm_close(pcm); }
+
+  snd_pcm_t *pcm;
+};
+} // namespace
+} // namespace alsa_wrappers
+} // namespace sbash64::game
+
 #include <SDL.h>
 #include <SDL_events.h>
 #include <SDL_hints.h>
@@ -798,6 +884,197 @@ static void flushEvents(bool &playing) {
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
                 const std::string &enemyImagePath) -> int {
+  std::atomic<bool> quitAudioThread;
+
+  // std::thread audioThread{[&quitAudioThread]() {
+  //   alsa_wrappers::PCM pcm;
+  //   if (const auto error{snd_pcm_set_params(pcm.pcm, SND_PCM_FORMAT_S16,
+  //                                           SND_PCM_ACCESS_RW_INTERLEAVED, 1,
+  //                                           48000, 1, 500000)};
+  //       error < 0)
+  //     throwAlsaRuntimeError("can't set parameters", error);
+
+  //   if (const auto error{snd_pcm_start(pcm.pcm)}; error < 0)
+  //     throwAlsaRuntimeError("can't start pcm", error);
+
+  //   const auto pollDescriptorsCount =
+  //   snd_pcm_poll_descriptors_count(pcm.pcm); if (pollDescriptorsCount <= 0) {
+  //   }
+
+  //   std::vector<pollfd> ufds(pollDescriptorsCount);
+  //   if (const auto error{
+  //           snd_pcm_poll_descriptors(pcm.pcm, ufds.data(), ufds.size())};
+  //       error < 0)
+  //     throwAlsaRuntimeError("Unable to obtain poll descriptors for playback",
+  //                           error);
+  //   while (!quitAudioThread) {
+  //     while (true) {
+  //       poll(ufds.data(), ufds.size(), -1);
+  //       unsigned short revents = 0;
+  //       snd_pcm_poll_descriptors_revents(pcm.pcm, ufds.data(), ufds.size(),
+  //                                        &revents);
+  //       if ((revents & POLLERR) != 0)
+  //         ;
+  //       if ((revents & POLLOUT) != 0)
+  //         break;
+  //     }
+
+  //     snd_pcm_hw_params_t *hwparams = nullptr;
+  //     snd_pcm_hw_params_malloc(&hwparams);
+  //     snd_pcm_hw_params_current(pcm.pcm, hwparams);
+  //     snd_pcm_uframes_t periodSize = 0;
+  //     int direction = 0;
+  //     snd_pcm_hw_params_get_period_size(hwparams, &periodSize, &direction);
+  //     unsigned int channels = 0;
+  //     snd_pcm_hw_params_get_channels(hwparams, &channels);
+  //     snd_pcm_hw_params_free(hwparams);
+
+  //     std::vector<unsigned char> samples(
+  //         snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) *
+  //             (periodSize * channels - 1) / 8 +
+  //         1);
+
+  //     const auto bitsPerSample = 16;
+  //     const auto bytesPerSample = bitsPerSample / 8;
+  //     const auto phys_bps =
+  //         snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) / 8;
+  //     for (snd_pcm_uframes_t frameCounter{0}; frameCounter < periodSize;
+  //          ++frameCounter) {
+  //       for (auto channel = 0; channel < channels; channel++) {
+  //         auto *data = samples.data() +
+  //                      snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) *
+  //                          (channel + frameCounter * channels) / 8;
+  //         auto sample = static_cast<int>(
+  //             ((1 << (16 - 1)) - 1) *
+  //             std::sin(2 * std::acos(-1) * frameCounter++ / periodSize));
+  //         if (snd_pcm_format_big_endian(SND_PCM_FORMAT_S16) == 1)
+  //           for (auto i = 0; i < bytesPerSample; i++)
+  //             *(data + phys_bps - 1 - i) = (sample >> i * 8) & 0xff;
+  //         else
+  //           for (auto i = 0; i < bytesPerSample; i++)
+  //             *(data + i) = (sample >> i * 8) & 0xff;
+  //       }
+  //     }
+
+  //     auto actualFramesWritten =
+  //         snd_pcm_writei(pcm.pcm, samples.data(), periodSize);
+  //     if (actualFramesWritten < 0)
+  //       ;
+  //     if (snd_pcm_state(pcm.pcm) != SND_PCM_STATE_RUNNING)
+  //       ;
+  //     if (actualFramesWritten < periodSize)
+  //       ;
+  //   }
+  // }};
+
+  std::thread audioThread{[&quitAudioThread]() {
+    snd_pcm_hw_params_t *hw_params = nullptr;
+    snd_pcm_sw_params_t *sw_params = nullptr;
+    std::array<std::int16_t, 4096> buf{};
+
+    auto counter{0};
+    for (auto &x : buf)
+      x = std::numeric_limits<std::int16_t>::max() *
+          std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size());
+
+    alsa_wrappers::PCM pcm;
+
+    if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
+      throwAlsaRuntimeError("cannot allocate hardware parameter structure",
+                            error);
+
+    if (const auto error{snd_pcm_hw_params_any(pcm.pcm, hw_params)}; error < 0)
+      throwAlsaRuntimeError("cannot initialize hardware parameter structure",
+                            error);
+
+    if (const auto error{snd_pcm_hw_params_set_access(
+            pcm.pcm, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set access type", error);
+
+    if (const auto error{snd_pcm_hw_params_set_format(pcm.pcm, hw_params,
+                                                      SND_PCM_FORMAT_S16_LE)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set sample format", error);
+
+    auto desiredSampleRate{44100U};
+    auto direction{0};
+    if (const auto error{snd_pcm_hw_params_set_rate_near(
+            pcm.pcm, hw_params, &desiredSampleRate, &direction)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set sample rate", error);
+
+    if (const auto error{snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 1)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set channel count", error);
+
+    if (const auto error{snd_pcm_hw_params(pcm.pcm, hw_params)}; error < 0)
+      throwAlsaRuntimeError("cannot set parameters", error);
+
+    snd_pcm_hw_params_free(hw_params);
+
+    /* tell ALSA to wake us up whenever 4096 or more frames
+       of playback data can be delivered. Also, tell
+       ALSA that we'll start the device ourselves.
+    */
+
+    if (const auto error{snd_pcm_sw_params_malloc(&sw_params)}; error < 0)
+      throwAlsaRuntimeError("cannot allocate software parameters structure",
+                            error);
+
+    if (const auto error{snd_pcm_sw_params_current(pcm.pcm, sw_params)};
+        error < 0)
+      throwAlsaRuntimeError("cannot initialize software parameters structure",
+                            error);
+
+    if (const auto error{
+            snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params, 4096)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set minimum available count", error);
+
+    if (const auto error{
+            snd_pcm_sw_params_set_start_threshold(pcm.pcm, sw_params, 0U)};
+        error < 0)
+      throwAlsaRuntimeError("cannot set start mode", error);
+
+    if (const auto error{snd_pcm_sw_params(pcm.pcm, sw_params)}; error < 0)
+      throwAlsaRuntimeError("cannot set software parameters", error);
+
+    /* the interface will interrupt the kernel every 4096 frames, and ALSA
+       will wake up this program very soon after that.
+    */
+
+    if (const auto error{snd_pcm_prepare(pcm.pcm)}; error < 0)
+      throwAlsaRuntimeError("cannot prepare audio interface for use", error);
+
+    while (!quitAudioThread) {
+      /* wait till the interface is ready for data, or 1 second
+         has elapsed.
+      */
+
+      if (const auto error{snd_pcm_wait(pcm.pcm, 1000)}; error < 0)
+        throwAlsaRuntimeError("poll failed", error);
+
+      /* find out how much space is available for playback data */
+      auto frames_to_deliver = snd_pcm_avail_update(pcm.pcm);
+
+      if (frames_to_deliver < 0) {
+        if (frames_to_deliver == -EPIPE)
+          throw std::runtime_error{"an xrun occured"};
+        throw std::runtime_error{"unknown ALSA avail update"};
+      }
+
+      frames_to_deliver = frames_to_deliver > 4096 ? 4096 : frames_to_deliver;
+
+      /* deliver the data */
+
+      if (const auto error{
+              snd_pcm_writei(pcm.pcm, buf.data(), frames_to_deliver)};
+          error != frames_to_deliver)
+        throw std::runtime_error{"unknown ALSA avail update"};
+    }
+  }};
+
   sdl_wrappers::Init scopedInitialization;
   constexpr auto pixelScale{4};
   const auto cameraWidth{256};
@@ -887,6 +1164,8 @@ static auto run(const std::string &playerImagePath,
                               -leftEdge(backgroundSourceRectangle)));
     SDL_RenderPresent(rendererWrapper.renderer);
   }
+  quitAudioThread = true;
+  audioThread.join();
   return EXIT_SUCCESS;
 }
 } // namespace sbash64::game
