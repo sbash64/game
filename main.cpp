@@ -638,7 +638,10 @@ struct PCM {
       throwAlsaRuntimeError("playback open error", error);
   }
 
-  ~PCM() { snd_pcm_close(pcm); }
+  ~PCM() {
+    // snd_pcm_drain(pcm);
+    snd_pcm_close(pcm);
+  }
 
   snd_pcm_t *pcm;
 };
@@ -839,7 +842,7 @@ static auto run(const std::string &playerImagePath,
     auto counter{0};
     for (auto &x : buf)
       x = std::numeric_limits<std::int16_t>::max() *
-          std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size());
+          std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size()) / 2;
 
     alsa_wrappers::PCM pcm;
 
@@ -935,7 +938,7 @@ static auto run(const std::string &playerImagePath,
       if (const auto error{
               snd_pcm_writei(pcm.pcm, buf.data(), frames_to_deliver)};
           error != frames_to_deliver)
-        throw std::runtime_error{"unknown ALSA avail update"};
+        throw std::runtime_error{"write error"};
     }
   }};
 
