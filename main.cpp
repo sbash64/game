@@ -619,7 +619,6 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
 } // namespace sbash64::game
 
 #include <asoundlib.h>
-// #include <poll.h>
 
 namespace sbash64::game {
 [[noreturn]] static void throwAlsaRuntimeError(std::string_view message,
@@ -627,59 +626,6 @@ namespace sbash64::game {
   std::stringstream stream;
   stream << message << ": " << snd_strerror(error);
   throw std::runtime_error{stream.str()};
-}
-
-static void async_direct_callback(snd_async_handler_t *ahandler) {
-  snd_pcm_t *handle = snd_async_handler_get_pcm(ahandler);
-
-  while (true) {
-    const auto state = snd_pcm_state(handle);
-    if (state == SND_PCM_STATE_XRUN) {
-    } else if (state == SND_PCM_STATE_SUSPENDED) {
-    }
-    if (snd_pcm_avail_update(handle) >= 0) {
-      break;
-    }
-  }
-
-  snd_pcm_uframes_t frames = 0;
-  snd_pcm_uframes_t offset = 0;
-  const snd_pcm_channel_area_t *channelAreas = nullptr;
-  const auto err = snd_pcm_mmap_begin(handle, &channelAreas, &offset, &frames);
-  if (err < 0) {
-  }
-
-  const auto channels{1};
-  auto bitsPerSample = 16;
-  auto bytesPerSample = bitsPerSample / 8;
-  auto phys_bps = snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) / 8;
-
-  for (auto channel = 0; channel < channels; channel++) {
-    if ((channelAreas[channel].first % 8) != 0) {
-    }
-    if ((channelAreas[channel].step % 16) != 0) {
-    }
-  }
-
-  for (snd_pcm_uframes_t frameCounter{0}; frameCounter < frames;
-       ++frameCounter) {
-    for (auto channel = 0; channel < channels; channel++) {
-      auto *data = static_cast<unsigned char *>(channelAreas[channel].addr) +
-                   channelAreas[channel].first / 8 +
-                   (offset + frameCounter) * channelAreas[channel].step / 8;
-      auto sample = 0;
-      if (snd_pcm_format_big_endian(SND_PCM_FORMAT_S16) == 1)
-        for (auto i = 0; i < bytesPerSample; i++)
-          *(data + phys_bps - 1 - i) = (sample >> i * 8) & 0xff;
-      else
-        for (auto i = 0; i < bytesPerSample; i++)
-          *(data + i) = (sample >> i * 8) & 0xff;
-    }
-  }
-
-  const auto commitres = snd_pcm_mmap_commit(handle, offset, frames);
-  if (commitres < 0 || commitres != frames) {
-  }
 }
 
 namespace alsa_wrappers {
@@ -885,88 +831,6 @@ static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
                 const std::string &enemyImagePath) -> int {
   std::atomic<bool> quitAudioThread;
-
-  // std::thread audioThread{[&quitAudioThread]() {
-  //   alsa_wrappers::PCM pcm;
-  //   if (const auto error{snd_pcm_set_params(pcm.pcm, SND_PCM_FORMAT_S16,
-  //                                           SND_PCM_ACCESS_RW_INTERLEAVED, 1,
-  //                                           48000, 1, 500000)};
-  //       error < 0)
-  //     throwAlsaRuntimeError("can't set parameters", error);
-
-  //   if (const auto error{snd_pcm_start(pcm.pcm)}; error < 0)
-  //     throwAlsaRuntimeError("can't start pcm", error);
-
-  //   const auto pollDescriptorsCount =
-  //   snd_pcm_poll_descriptors_count(pcm.pcm); if (pollDescriptorsCount <= 0) {
-  //   }
-
-  //   std::vector<pollfd> ufds(pollDescriptorsCount);
-  //   if (const auto error{
-  //           snd_pcm_poll_descriptors(pcm.pcm, ufds.data(), ufds.size())};
-  //       error < 0)
-  //     throwAlsaRuntimeError("Unable to obtain poll descriptors for playback",
-  //                           error);
-  //   while (!quitAudioThread) {
-  //     while (true) {
-  //       poll(ufds.data(), ufds.size(), -1);
-  //       unsigned short revents = 0;
-  //       snd_pcm_poll_descriptors_revents(pcm.pcm, ufds.data(), ufds.size(),
-  //                                        &revents);
-  //       if ((revents & POLLERR) != 0)
-  //         ;
-  //       if ((revents & POLLOUT) != 0)
-  //         break;
-  //     }
-
-  //     snd_pcm_hw_params_t *hwparams = nullptr;
-  //     snd_pcm_hw_params_malloc(&hwparams);
-  //     snd_pcm_hw_params_current(pcm.pcm, hwparams);
-  //     snd_pcm_uframes_t periodSize = 0;
-  //     int direction = 0;
-  //     snd_pcm_hw_params_get_period_size(hwparams, &periodSize, &direction);
-  //     unsigned int channels = 0;
-  //     snd_pcm_hw_params_get_channels(hwparams, &channels);
-  //     snd_pcm_hw_params_free(hwparams);
-
-  //     std::vector<unsigned char> samples(
-  //         snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) *
-  //             (periodSize * channels - 1) / 8 +
-  //         1);
-
-  //     const auto bitsPerSample = 16;
-  //     const auto bytesPerSample = bitsPerSample / 8;
-  //     const auto phys_bps =
-  //         snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) / 8;
-  //     for (snd_pcm_uframes_t frameCounter{0}; frameCounter < periodSize;
-  //          ++frameCounter) {
-  //       for (auto channel = 0; channel < channels; channel++) {
-  //         auto *data = samples.data() +
-  //                      snd_pcm_format_physical_width(SND_PCM_FORMAT_S16) *
-  //                          (channel + frameCounter * channels) / 8;
-  //         auto sample = static_cast<int>(
-  //             ((1 << (16 - 1)) - 1) *
-  //             std::sin(2 * std::acos(-1) * frameCounter++ / periodSize));
-  //         if (snd_pcm_format_big_endian(SND_PCM_FORMAT_S16) == 1)
-  //           for (auto i = 0; i < bytesPerSample; i++)
-  //             *(data + phys_bps - 1 - i) = (sample >> i * 8) & 0xff;
-  //         else
-  //           for (auto i = 0; i < bytesPerSample; i++)
-  //             *(data + i) = (sample >> i * 8) & 0xff;
-  //       }
-  //     }
-
-  //     auto actualFramesWritten =
-  //         snd_pcm_writei(pcm.pcm, samples.data(), periodSize);
-  //     if (actualFramesWritten < 0)
-  //       ;
-  //     if (snd_pcm_state(pcm.pcm) != SND_PCM_STATE_RUNNING)
-  //       ;
-  //     if (actualFramesWritten < periodSize)
-  //       ;
-  //   }
-  // }};
-
   std::thread audioThread{[&quitAudioThread]() {
     snd_pcm_hw_params_t *hw_params = nullptr;
     snd_pcm_sw_params_t *sw_params = nullptr;
@@ -993,7 +857,7 @@ static auto run(const std::string &playerImagePath,
       throwAlsaRuntimeError("cannot set access type", error);
 
     if (const auto error{snd_pcm_hw_params_set_format(pcm.pcm, hw_params,
-                                                      SND_PCM_FORMAT_S16_LE)};
+                                                      SND_PCM_FORMAT_S16)};
         error < 0)
       throwAlsaRuntimeError("cannot set sample format", error);
 
