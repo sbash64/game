@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -618,6 +619,32 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
 }
 } // namespace sbash64::game
 
+#include <sndfile.h>
+
+namespace sbash64::game {
+[[noreturn]] static void throwSndfileRuntimeError(std::string_view message,
+                                                  SNDFILE *file = {}) {
+  std::stringstream stream;
+  stream << message << ": " << sf_strerror(file);
+  throw std::runtime_error{stream.str()};
+}
+namespace sndfile_wrappers {
+namespace {
+struct File {
+  File(const std::string &path) : file{sf_open(path.c_str(), SFM_READ, &info)} {
+    if (file == nullptr)
+      throwSndfileRuntimeError("Not able to open input file");
+  }
+
+  ~File() { sf_close(file); }
+
+  SF_INFO info{};
+  SNDFILE *file;
+};
+} // namespace
+} // namespace sndfile_wrappers
+} // namespace sbash64::game
+
 #include <asoundlib.h>
 
 namespace sbash64::game {
@@ -832,19 +859,25 @@ static void flushEvents(bool &playing) {
 
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
-                const std::string &enemyImagePath) -> int {
+                const std::string &enemyImagePath,
+                const std::string &backgroundMusicPath) -> int {
+
   std::atomic<bool> quitAudioThread;
-  std::thread audioThread{[&quitAudioThread]() {
+  sndfile_wrappers::File backgroundMusicFile{backgroundMusicPath};
+  alsa_wrappers::PCM pcm;
+  std::thread audioThread{[&quitAudioThread, &backgroundMusicFile, &pcm]() {
+    std::vector<short> backgroundMusicData(backgroundMusicFile.info.frames *
+                                           backgroundMusicFile.info.channels);
+    auto actual{sf_readf_short(backgroundMusicFile.file,
+                               backgroundMusicData.data(),
+                               backgroundMusicFile.info.frames)};
+
     snd_pcm_hw_params_t *hw_params = nullptr;
     snd_pcm_sw_params_t *sw_params = nullptr;
-    std::array<std::int16_t, 4096> buf{};
-
-    auto counter{0};
-    for (auto &x : buf)
-      x = std::numeric_limits<std::int16_t>::max() *
-          std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size()) / 2;
-
-    alsa_wrappers::PCM pcm;
+    std::array<std::int16_t, 8192> buf{};
+    auto fileOffset{0};
+    std::copy(backgroundMusicData.begin() + fileOffset,
+              backgroundMusicData.begin() + fileOffset + 8192, buf.begin());
 
     if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
       throwAlsaRuntimeError("cannot allocate hardware parameter structure",
@@ -871,7 +904,7 @@ static auto run(const std::string &playerImagePath,
         error < 0)
       throwAlsaRuntimeError("cannot set sample rate", error);
 
-    if (const auto error{snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 1)};
+    if (const auto error{snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2)};
         error < 0)
       throwAlsaRuntimeError("cannot set channel count", error);
 
@@ -939,6 +972,19 @@ static auto run(const std::string &playerImagePath,
               snd_pcm_writei(pcm.pcm, buf.data(), frames_to_deliver)};
           error != frames_to_deliver)
         throw std::runtime_error{"write error"};
+
+      fileOffset += 2 * frames_to_deliver;
+
+      if (fileOffset + 8192 > backgroundMusicData.size())
+        fileOffset = 0;
+
+      std::copy(backgroundMusicData.begin() + fileOffset,
+                backgroundMusicData.begin() + fileOffset + 8192, buf.begin());
+
+      // auto counter{0};
+      // for (auto &x : buf)
+      //   x = std::numeric_limits<std::int16_t>::max() *
+      //       std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size()) / 2;
     }
   }};
 
@@ -1038,10 +1084,10 @@ static auto run(const std::string &playerImagePath,
 } // namespace sbash64::game
 
 int main(int argc, char *argv[]) {
-  if (argc < 4)
+  if (argc < 5)
     return EXIT_FAILURE;
   try {
-    return sbash64::game::run(argv[1], argv[2], argv[3]);
+    return sbash64::game::run(argv[1], argv[2], argv[3], argv[4]);
   } catch (const std::runtime_error &e) {
     std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
