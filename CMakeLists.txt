@@ -1,6 +1,6 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0048 NEW)
-project(sbash64-sdl-learn LANGUAGES CXX)
+project(sbash64-game LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -19,9 +19,8 @@ FetchContent_MakeAvailable(SDL_image)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_executable(sbash64-sdl-learn-main main.cpp)
-target_link_libraries(sbash64-sdl-learn-main SDL2::image SDL2::SDL2 asound
+add_executable(sbash64-game-main main.cpp)
+target_link_libraries(sbash64-game-main SDL2::image SDL2::SDL2 asound
                       Threads::Threads sndfile)
-target_compile_features(sbash64-sdl-learn-main PRIVATE cxx_std_20)
-target_compile_options(sbash64-sdl-learn-main
-                       PRIVATE "${SBASH64_GAME_WARNINGS}")
+target_compile_features(sbash64-game-main PRIVATE cxx_std_20)
+target_compile_options(sbash64-game-main PRIVATE "${SBASH64_GAME_WARNINGS}")
