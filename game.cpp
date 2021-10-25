@@ -331,4 +331,32 @@ auto handleHorizontalCollisions(
     return collideHorizontally(object, leftEdge(levelRectangle) + 1);
   return object;
 }
+
+auto shiftBackground(Rectangle backgroundSourceRectangle,
+                     distance_type backgroundSourceWidth,
+                     const Rectangle &playerRectangle,
+                     distance_type cameraWidth) -> Rectangle {
+  const auto playerDistanceRightOfCameraCenter{
+      leftEdge(playerRectangle) + playerRectangle.width / 2 - cameraWidth / 2 -
+      leftEdge(backgroundSourceRectangle)};
+  const auto distanceFromBackgroundRightEdgeToEnd{
+      backgroundSourceWidth - rightEdge(backgroundSourceRectangle) - 1};
+  if (playerDistanceRightOfCameraCenter > 0 &&
+      distanceFromBackgroundRightEdgeToEnd > 0)
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::min(distanceFromBackgroundRightEdgeToEnd,
+                                      playerDistanceRightOfCameraCenter));
+  if (isNegative(playerDistanceRightOfCameraCenter) &&
+      leftEdge(backgroundSourceRectangle) > 0)
+    return shiftHorizontally(backgroundSourceRectangle,
+                             std::max(-leftEdge(backgroundSourceRectangle),
+                                      playerDistanceRightOfCameraCenter));
+  return backgroundSourceRectangle;
+}
+
+auto applyVelocity(MovingObject object) -> MovingObject {
+  object.rectangle =
+      applyVerticalVelocity({applyHorizontalVelocity(object), object.velocity});
+  return object;
+}
 } // namespace sbash64::game

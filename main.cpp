@@ -144,6 +144,11 @@ static void flushEvents(bool &playing) {
     playing = event.type != SDL_QUIT;
 }
 
+static auto applyVelocity(PlayerState playerState) -> PlayerState {
+  playerState.object = applyVelocity(playerState.object);
+  return playerState;
+}
+
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
                 const std::string &enemyImagePath,
