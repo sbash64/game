@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -149,6 +150,114 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
   return playerState;
 }
 
+static void loopAudio(std::atomic<bool> &quitAudioThread,
+                      const std::vector<short> &backgroundMusicData,
+                      const alsa_wrappers::PCM &pcm) {
+  const auto framesPerUpdate{4096};
+  snd_pcm_hw_params_t *hw_params = nullptr;
+  if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
+    throwAlsaRuntimeError("cannot allocate hardware parameter structure",
+                          error);
+
+  if (const auto error{snd_pcm_hw_params_any(pcm.pcm, hw_params)}; error < 0)
+    throwAlsaRuntimeError("cannot initialize hardware parameter structure",
+                          error);
+
+  if (const auto error{snd_pcm_hw_params_set_access(
+          pcm.pcm, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set access type", error);
+
+  if (const auto error{
+          snd_pcm_hw_params_set_format(pcm.pcm, hw_params, SND_PCM_FORMAT_S16)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set sample format", error);
+
+  auto desiredSampleRate{44100U};
+  auto direction{0};
+  if (const auto error{snd_pcm_hw_params_set_rate_near(
+          pcm.pcm, hw_params, &desiredSampleRate, &direction)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set sample rate", error);
+
+  if (const auto error{snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set channel count", error);
+
+  if (const auto error{snd_pcm_hw_params(pcm.pcm, hw_params)}; error < 0)
+    throwAlsaRuntimeError("cannot set parameters", error);
+
+  snd_pcm_hw_params_free(hw_params);
+
+  /* tell ALSA to wake us up whenever 4096 or more frames
+     of playback data can be delivered. Also, tell
+     ALSA that we'll start the device ourselves.
+  */
+
+  snd_pcm_sw_params_t *sw_params = nullptr;
+  if (const auto error{snd_pcm_sw_params_malloc(&sw_params)}; error < 0)
+    throwAlsaRuntimeError("cannot allocate software parameters structure",
+                          error);
+
+  if (const auto error{snd_pcm_sw_params_current(pcm.pcm, sw_params)};
+      error < 0)
+    throwAlsaRuntimeError("cannot initialize software parameters structure",
+                          error);
+
+  if (const auto error{
+          snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params, framesPerUpdate)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set minimum available count", error);
+
+  if (const auto error{
+          snd_pcm_sw_params_set_start_threshold(pcm.pcm, sw_params, 0U)};
+      error < 0)
+    throwAlsaRuntimeError("cannot set start mode", error);
+
+  if (const auto error{snd_pcm_sw_params(pcm.pcm, sw_params)}; error < 0)
+    throwAlsaRuntimeError("cannot set software parameters", error);
+
+  /* the interface will interrupt the kernel every 4096 frames, and ALSA
+     will wake up this program very soon after that.
+  */
+
+  if (const auto error{snd_pcm_prepare(pcm.pcm)}; error < 0)
+    throwAlsaRuntimeError("cannot prepare audio interface for use", error);
+
+  std::array<std::int16_t, 2 * framesPerUpdate> buffer{};
+  auto fileOffset{0};
+
+  while (!quitAudioThread) {
+    std::copy(backgroundMusicData.begin() + fileOffset,
+              backgroundMusicData.begin() + fileOffset + buffer.size(),
+              buffer.begin());
+
+    if (const auto error{snd_pcm_wait(pcm.pcm, 1000)}; error < 0)
+      throwAlsaRuntimeError("poll failed", error);
+
+    auto frames_to_deliver = snd_pcm_avail_update(pcm.pcm);
+
+    if (frames_to_deliver < 0) {
+      if (frames_to_deliver == -EPIPE)
+        throw std::runtime_error{"an xrun occured"};
+      throw std::runtime_error{"unknown ALSA avail update"};
+    }
+
+    frames_to_deliver = frames_to_deliver > framesPerUpdate ? framesPerUpdate
+                                                            : frames_to_deliver;
+
+    if (const auto error{
+            snd_pcm_writei(pcm.pcm, buffer.data(), frames_to_deliver)};
+        error != frames_to_deliver)
+      throw std::runtime_error{"write error"};
+
+    fileOffset += 2 * frames_to_deliver;
+
+    if (fileOffset + buffer.size() > backgroundMusicData.size())
+      fileOffset = 0;
+  }
+}
+
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
                 const std::string &enemyImagePath,
@@ -164,112 +273,8 @@ static auto run(const std::string &playerImagePath,
                    backgroundMusicFile.info.frames);
   }
   alsa_wrappers::PCM pcm;
-  std::thread audioThread{[&quitAudioThread, &backgroundMusicData, &pcm]() {
-    const auto framesPerUpdate{4096};
-    snd_pcm_hw_params_t *hw_params = nullptr;
-    if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
-      throwAlsaRuntimeError("cannot allocate hardware parameter structure",
-                            error);
-
-    if (const auto error{snd_pcm_hw_params_any(pcm.pcm, hw_params)}; error < 0)
-      throwAlsaRuntimeError("cannot initialize hardware parameter structure",
-                            error);
-
-    if (const auto error{snd_pcm_hw_params_set_access(
-            pcm.pcm, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set access type", error);
-
-    if (const auto error{snd_pcm_hw_params_set_format(pcm.pcm, hw_params,
-                                                      SND_PCM_FORMAT_S16)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set sample format", error);
-
-    auto desiredSampleRate{44100U};
-    auto direction{0};
-    if (const auto error{snd_pcm_hw_params_set_rate_near(
-            pcm.pcm, hw_params, &desiredSampleRate, &direction)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set sample rate", error);
-
-    if (const auto error{snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set channel count", error);
-
-    if (const auto error{snd_pcm_hw_params(pcm.pcm, hw_params)}; error < 0)
-      throwAlsaRuntimeError("cannot set parameters", error);
-
-    snd_pcm_hw_params_free(hw_params);
-
-    /* tell ALSA to wake us up whenever 4096 or more frames
-       of playback data can be delivered. Also, tell
-       ALSA that we'll start the device ourselves.
-    */
-
-    snd_pcm_sw_params_t *sw_params = nullptr;
-    if (const auto error{snd_pcm_sw_params_malloc(&sw_params)}; error < 0)
-      throwAlsaRuntimeError("cannot allocate software parameters structure",
-                            error);
-
-    if (const auto error{snd_pcm_sw_params_current(pcm.pcm, sw_params)};
-        error < 0)
-      throwAlsaRuntimeError("cannot initialize software parameters structure",
-                            error);
-
-    if (const auto error{snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params,
-                                                         framesPerUpdate)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set minimum available count", error);
-
-    if (const auto error{
-            snd_pcm_sw_params_set_start_threshold(pcm.pcm, sw_params, 0U)};
-        error < 0)
-      throwAlsaRuntimeError("cannot set start mode", error);
-
-    if (const auto error{snd_pcm_sw_params(pcm.pcm, sw_params)}; error < 0)
-      throwAlsaRuntimeError("cannot set software parameters", error);
-
-    /* the interface will interrupt the kernel every 4096 frames, and ALSA
-       will wake up this program very soon after that.
-    */
-
-    if (const auto error{snd_pcm_prepare(pcm.pcm)}; error < 0)
-      throwAlsaRuntimeError("cannot prepare audio interface for use", error);
-
-    std::array<std::int16_t, 2 * framesPerUpdate> buffer{};
-    auto fileOffset{0};
-
-    while (!quitAudioThread) {
-      std::copy(backgroundMusicData.begin() + fileOffset,
-                backgroundMusicData.begin() + fileOffset + buffer.size(),
-                buffer.begin());
-
-      if (const auto error{snd_pcm_wait(pcm.pcm, 1000)}; error < 0)
-        throwAlsaRuntimeError("poll failed", error);
-
-      auto frames_to_deliver = snd_pcm_avail_update(pcm.pcm);
-
-      if (frames_to_deliver < 0) {
-        if (frames_to_deliver == -EPIPE)
-          throw std::runtime_error{"an xrun occured"};
-        throw std::runtime_error{"unknown ALSA avail update"};
-      }
-
-      frames_to_deliver = frames_to_deliver > framesPerUpdate
-                              ? framesPerUpdate
-                              : frames_to_deliver;
-
-      if (const auto error{
-              snd_pcm_writei(pcm.pcm, buffer.data(), frames_to_deliver)};
-          error != frames_to_deliver)
-        throw std::runtime_error{"write error"};
-
-      fileOffset += 2 * frames_to_deliver;
-
-      if (fileOffset + buffer.size() > backgroundMusicData.size())
-        fileOffset = 0;
-    }
-  }};
+  std::thread audioThread{loopAudio, std::ref(quitAudioThread),
+                          std::cref(backgroundMusicData), std::cref(pcm)};
 
   sdl_wrappers::Init scopedInitialization;
   constexpr auto pixelScale{4};
