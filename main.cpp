@@ -147,8 +147,55 @@ static void throwAlsaRuntimeErrorOnFailure(const std::function<int()> &f,
 
 static void loopAudio(std::atomic<bool> &quitAudioThread,
                       const std::vector<short> &backgroundMusicData,
-                      const alsa_wrappers::PCM &pcm) {
-  const auto framesPerUpdate{4096};
+                      const alsa_wrappers::PCM &pcm,
+                      snd_pcm_sframes_t framesPerUpdate) {
+  std::vector<std::int16_t> buffer(2 * framesPerUpdate);
+  std::ptrdiff_t fileOffset{0};
+
+  while (!quitAudioThread) {
+    if (fileOffset + buffer.size() > backgroundMusicData.size())
+      fileOffset = 0;
+
+    std::copy(backgroundMusicData.begin() + fileOffset,
+              backgroundMusicData.begin() + fileOffset + buffer.size(),
+              buffer.begin());
+
+    throwAlsaRuntimeErrorOnFailure(
+        [&pcm]() { return snd_pcm_wait(pcm.pcm, 1000); }, "poll failed");
+
+    const auto framesReadyToWrite{snd_pcm_avail_update(pcm.pcm)};
+    if (framesReadyToWrite < 0) {
+      if (framesReadyToWrite == -EPIPE)
+        throw std::runtime_error{"an xrun occured"};
+      throw std::runtime_error{"unknown ALSA avail update"};
+    }
+
+    const auto framesToWrite{framesReadyToWrite > framesPerUpdate
+                                 ? framesPerUpdate
+                                 : framesReadyToWrite};
+    if (const auto framesWritten{
+            snd_pcm_writei(pcm.pcm, buffer.data(), framesToWrite)};
+        framesWritten != framesToWrite)
+      throw std::runtime_error{"write error"};
+
+    fileOffset += 2 * framesToWrite;
+  }
+}
+
+static auto readShortAudio(const std::string &path) -> std::vector<short> {
+  std::vector<short> audio;
+  {
+    sndfile_wrappers::File file{path};
+    audio.resize(static_cast<std::vector<short>::size_type>(
+        file.info.frames * file.info.channels));
+    sf_readf_short(file.file, audio.data(), file.info.frames);
+  }
+  return audio;
+}
+
+static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
+    -> alsa_wrappers::PCM {
+  alsa_wrappers::PCM pcm;
   snd_pcm_hw_params_t *hw_params = nullptr;
   throwAlsaRuntimeErrorOnFailure(
       [&hw_params]() { return snd_pcm_hw_params_malloc(&hw_params); },
@@ -201,7 +248,7 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
       },
       "cannot initialize software parameters structure");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, sw_params]() {
+      [&pcm, sw_params, framesPerUpdate]() {
         return snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params,
                                                framesPerUpdate);
       },
@@ -221,50 +268,7 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
 
   throwAlsaRuntimeErrorOnFailure([&pcm]() { return snd_pcm_prepare(pcm.pcm); },
                                  "cannot prepare audio interface for use");
-
-  std::array<std::int16_t, 2 * framesPerUpdate> buffer{};
-  std::ptrdiff_t fileOffset{0};
-
-  while (!quitAudioThread) {
-    if (fileOffset + buffer.size() > backgroundMusicData.size())
-      fileOffset = 0;
-
-    std::copy(backgroundMusicData.begin() + fileOffset,
-              backgroundMusicData.begin() + fileOffset + buffer.size(),
-              buffer.begin());
-
-    throwAlsaRuntimeErrorOnFailure(
-        [&pcm]() { return snd_pcm_wait(pcm.pcm, 1000); }, "poll failed");
-
-    const auto framesReadyToWrite{snd_pcm_avail_update(pcm.pcm)};
-    if (framesReadyToWrite < 0) {
-      if (framesReadyToWrite == -EPIPE)
-        throw std::runtime_error{"an xrun occured"};
-      throw std::runtime_error{"unknown ALSA avail update"};
-    }
-
-    const auto framesToWrite{framesReadyToWrite > framesPerUpdate
-                                 ? framesPerUpdate
-                                 : framesReadyToWrite};
-    if (const auto framesWritten{
-            snd_pcm_writei(pcm.pcm, buffer.data(), framesToWrite)};
-        framesWritten != framesToWrite)
-      throw std::runtime_error{"write error"};
-
-    fileOffset += 2 * framesToWrite;
-  }
-}
-
-static auto readShortAudio(const std::string &path) -> std::vector<short> {
-  std::vector<short> backgroundMusicData;
-  {
-    sndfile_wrappers::File backgroundMusicFile{path};
-    backgroundMusicData.resize(static_cast<std::vector<short>::size_type>(
-        backgroundMusicFile.info.frames * backgroundMusicFile.info.channels));
-    sf_readf_short(backgroundMusicFile.file, backgroundMusicData.data(),
-                   backgroundMusicFile.info.frames);
-  }
-  return backgroundMusicData;
+  return pcm;
 }
 
 static auto run(const std::string &playerImagePath,
@@ -273,9 +277,10 @@ static auto run(const std::string &playerImagePath,
                 const std::string &backgroundMusicPath) -> int {
 
   std::atomic<bool> quitAudioThread;
+  const auto framesPerUpdate{4096};
   std::thread audioThread{loopAudio, std::ref(quitAudioThread),
                           readShortAudio(backgroundMusicPath),
-                          alsa_wrappers::PCM{}};
+                          initializeAlsaPcm(framesPerUpdate), framesPerUpdate};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
