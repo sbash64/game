@@ -201,6 +201,8 @@ static_assert(round(RationalDistance{-4, 7}) == -1,
 
 enum class JumpState { grounded, started, released };
 
+enum class DirectionFacing { left, right };
+
 struct Point {
   distance_type x;
   distance_type y;
@@ -225,6 +227,7 @@ struct MovingObject {
 struct PlayerState {
   MovingObject object;
   JumpState jumpState;
+  DirectionFacing directionFacing;
 };
 
 constexpr auto operator-(Velocity a) -> Velocity {
@@ -812,10 +815,14 @@ static auto applyHorizontalForces(PlayerState playerState,
                                   distance_type playerRunAcceleration)
     -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
-  if (pressing(keyStates, SDL_SCANCODE_LEFT))
+  if (pressing(keyStates, SDL_SCANCODE_LEFT)) {
     playerState.object.velocity.horizontal -= playerRunAcceleration;
-  if (pressing(keyStates, SDL_SCANCODE_RIGHT))
+    playerState.directionFacing = DirectionFacing::left;
+  }
+  if (pressing(keyStates, SDL_SCANCODE_RIGHT)) {
     playerState.object.velocity.horizontal += playerRunAcceleration;
+    playerState.directionFacing = DirectionFacing::right;
+  }
   playerState.object.velocity.horizontal = withFriction(
       clamp(playerState.object.velocity.horizontal, playerMaxHorizontalSpeed),
       groundFriction);
@@ -849,6 +856,18 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
   const auto sourceSDLRect{toSDLRect(sourceRectangle)};
   SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
                    &sourceSDLRect, &projection, 0, nullptr, SDL_FLIP_NONE);
+}
+
+static void
+presentFlippedHorizontally(const sdl_wrappers::Renderer &rendererWrapper,
+                           const sdl_wrappers::Texture &textureWrapper,
+                           const Rectangle &sourceRectangle, int pixelScale,
+                           const Rectangle &destinationRectangle) {
+  const auto projection{toSDLRect(destinationRectangle * pixelScale)};
+  const auto sourceSDLRect{toSDLRect(sourceRectangle)};
+  SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
+                   &sourceSDLRect, &projection, 0, nullptr,
+                   SDL_FLIP_HORIZONTAL);
 }
 
 static void flushEvents(bool &playing) {
@@ -1022,7 +1041,8 @@ static auto run(const std::string &playerImagePath,
       {Rectangle{Point{0, topEdge(floorRectangle) - playerHeight}, playerWidth,
                  playerHeight},
        Velocity{{0, 1}, 0}},
-      JumpState::grounded};
+      JumpState::grounded,
+      DirectionFacing::right};
   MovingObject enemy{{Point{140, topEdge(floorRectangle) - enemyHeight},
                       enemyWidth, enemyHeight},
                      Velocity{{0, 1}, 0}};
@@ -1063,9 +1083,16 @@ static auto run(const std::string &playerImagePath,
     present(rendererWrapper, enemyTextureWrapper, enemySourceRect, pixelScale,
             shiftHorizontally(enemy.rectangle,
                               -leftEdge(backgroundSourceRectangle)));
-    present(rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
-            shiftHorizontally(playerState.object.rectangle,
-                              -leftEdge(backgroundSourceRectangle)));
+    if (playerState.directionFacing == DirectionFacing::right)
+      present(rendererWrapper, playerTextureWrapper, playerSourceRect,
+              pixelScale,
+              shiftHorizontally(playerState.object.rectangle,
+                                -leftEdge(backgroundSourceRectangle)));
+    else
+      presentFlippedHorizontally(
+          rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
+          shiftHorizontally(playerState.object.rectangle,
+                            -leftEdge(backgroundSourceRectangle)));
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   quitAudioThread = true;
