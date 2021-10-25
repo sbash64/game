@@ -648,37 +648,7 @@ struct File {
 } // namespace sndfile_wrappers
 } // namespace sbash64::game
 
-#include <asoundlib.h>
-
-namespace sbash64::game {
-[[noreturn]] static void throwAlsaRuntimeError(std::string_view message,
-                                               int error) {
-  std::stringstream stream;
-  stream << message << ": " << snd_strerror(error);
-  throw std::runtime_error{stream.str()};
-}
-
-namespace alsa_wrappers {
-namespace {
-struct PCM {
-  PCM() {
-    if (const auto error{
-            snd_pcm_open(&pcm, "default", SND_PCM_STREAM_PLAYBACK, 0)};
-        error < 0)
-      throwAlsaRuntimeError("playback open error", error);
-  }
-
-  ~PCM() {
-    // snd_pcm_drain(pcm);
-    snd_pcm_close(pcm);
-  }
-
-  snd_pcm_t *pcm;
-};
-} // namespace
-} // namespace alsa_wrappers
-} // namespace sbash64::game
-
+#include <sbash64/game/alsa-wrappers.hpp>
 #include <sbash64/game/sdl-wrappers.hpp>
 
 #include <SDL.h>
