@@ -111,11 +111,12 @@ static auto applyVerticalForces(PlayerState playerState,
 static void present(const sdl_wrappers::Renderer &rendererWrapper,
                     const sdl_wrappers::Texture &textureWrapper,
                     const Rectangle &sourceRectangle, int pixelScale,
-                    const Rectangle &destinationRectangle) {
+                    const Rectangle &destinationRectangle,
+                    SDL_RendererFlip flip = SDL_FLIP_NONE) {
   const auto projection{toSDLRect(destinationRectangle * pixelScale)};
   const auto sourceSDLRect{toSDLRect(sourceRectangle)};
   SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
-                   &sourceSDLRect, &projection, 0, nullptr, SDL_FLIP_NONE);
+                   &sourceSDLRect, &projection, 0, nullptr, flip);
 }
 
 static void
@@ -123,11 +124,8 @@ presentFlippedHorizontally(const sdl_wrappers::Renderer &rendererWrapper,
                            const sdl_wrappers::Texture &textureWrapper,
                            const Rectangle &sourceRectangle, int pixelScale,
                            const Rectangle &destinationRectangle) {
-  const auto projection{toSDLRect(destinationRectangle * pixelScale)};
-  const auto sourceSDLRect{toSDLRect(sourceRectangle)};
-  SDL_RenderCopyEx(rendererWrapper.renderer, textureWrapper.texture,
-                   &sourceSDLRect, &projection, 0, nullptr,
-                   SDL_FLIP_HORIZONTAL);
+  present(rendererWrapper, textureWrapper, sourceRectangle, pixelScale,
+          destinationRectangle, SDL_FLIP_HORIZONTAL);
 }
 
 static void flushEvents(bool &playing) {
@@ -248,12 +246,25 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
     const auto framesToWrite{framesReadyToWrite > framesPerUpdate
                                  ? framesPerUpdate
                                  : framesReadyToWrite};
-    if (const auto error{snd_pcm_writei(pcm.pcm, buffer.data(), framesToWrite)};
-        error != framesToWrite)
+    if (const auto framesWritten{
+            snd_pcm_writei(pcm.pcm, buffer.data(), framesToWrite)};
+        framesWritten != framesToWrite)
       throw std::runtime_error{"write error"};
 
     fileOffset += 2 * framesToWrite;
   }
+}
+
+static auto readShortAudio(const std::string &path) -> std::vector<short> {
+  std::vector<short> backgroundMusicData;
+  {
+    sndfile_wrappers::File backgroundMusicFile{path};
+    backgroundMusicData.resize(static_cast<std::vector<short>::size_type>(
+        backgroundMusicFile.info.frames * backgroundMusicFile.info.channels));
+    sf_readf_short(backgroundMusicFile.file, backgroundMusicData.data(),
+                   backgroundMusicFile.info.frames);
+  }
+  return backgroundMusicData;
 }
 
 static auto run(const std::string &playerImagePath,
@@ -262,17 +273,10 @@ static auto run(const std::string &playerImagePath,
                 const std::string &backgroundMusicPath) -> int {
 
   std::atomic<bool> quitAudioThread;
-  std::vector<short> backgroundMusicData;
-  {
-    sndfile_wrappers::File backgroundMusicFile{backgroundMusicPath};
-    backgroundMusicData.resize(static_cast<std::vector<short>::size_type>(
-        backgroundMusicFile.info.frames * backgroundMusicFile.info.channels));
-    sf_readf_short(backgroundMusicFile.file, backgroundMusicData.data(),
-                   backgroundMusicFile.info.frames);
-  }
+
   alsa_wrappers::PCM pcm;
   std::thread audioThread{loopAudio, std::ref(quitAudioThread),
-                          std::cref(backgroundMusicData), std::cref(pcm)};
+                          readShortAudio(backgroundMusicPath), std::cref(pcm)};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
