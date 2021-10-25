@@ -622,34 +622,9 @@ static auto applyVelocity(PlayerState playerState) -> PlayerState {
 }
 } // namespace sbash64::game
 
-#include <sndfile.h>
-
-namespace sbash64::game {
-[[noreturn]] static void throwSndfileRuntimeError(std::string_view message,
-                                                  SNDFILE *file = {}) {
-  std::stringstream stream;
-  stream << message << ": " << sf_strerror(file);
-  throw std::runtime_error{stream.str()};
-}
-namespace sndfile_wrappers {
-namespace {
-struct File {
-  File(const std::string &path) : file{sf_open(path.c_str(), SFM_READ, &info)} {
-    if (file == nullptr)
-      throwSndfileRuntimeError("Not able to open input file");
-  }
-
-  ~File() { sf_close(file); }
-
-  SF_INFO info{};
-  SNDFILE *file;
-};
-} // namespace
-} // namespace sndfile_wrappers
-} // namespace sbash64::game
-
 #include <sbash64/game/alsa-wrappers.hpp>
 #include <sbash64/game/sdl-wrappers.hpp>
+#include <sbash64/game/sndfile-wrappers.hpp>
 
 #include <SDL.h>
 #include <SDL_events.h>

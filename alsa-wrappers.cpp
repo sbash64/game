@@ -1,4 +1,3 @@
-
 #include <sbash64/game/alsa-wrappers.hpp>
 
 #include <alsa/pcm.h>
@@ -26,7 +25,5 @@ PCM::~PCM() {
   // snd_pcm_drain(pcm);
   snd_pcm_close(pcm);
 }
-
-snd_pcm_t *pcm;
 } // namespace alsa_wrappers
 } // namespace sbash64::game

@@ -1,4 +1,3 @@
-
 #include <sbash64/game/sdl-wrappers.hpp>
 
 #include <SDL_image.h>
