@@ -19,8 +19,9 @@ FetchContent_MakeAvailable(SDL_image)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_executable(sbash64-game-main main.cpp)
+add_executable(sbash64-game-main sdl-wrappers.cpp main.cpp)
 target_link_libraries(sbash64-game-main SDL2::image SDL2::SDL2 asound
                       Threads::Threads sndfile)
+target_include_directories(sbash64-game-main PRIVATE include)
 target_compile_features(sbash64-game-main PRIVATE cxx_std_20)
 target_compile_options(sbash64-game-main PRIVATE "${SBASH64_GAME_WARNINGS}")
