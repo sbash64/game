@@ -873,14 +873,8 @@ static auto run(const std::string &playerImagePath,
   }
   alsa_wrappers::PCM pcm;
   std::thread audioThread{[&quitAudioThread, &backgroundMusicData, &pcm]() {
+    const auto framesPerUpdate{4096};
     snd_pcm_hw_params_t *hw_params = nullptr;
-    snd_pcm_sw_params_t *sw_params = nullptr;
-    std::array<std::int16_t, 8192> buf{};
-    auto fileOffset{0};
-    std::copy(backgroundMusicData.begin() + fileOffset,
-              backgroundMusicData.begin() + fileOffset + buf.size(),
-              buf.begin());
-
     if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
       throwAlsaRuntimeError("cannot allocate hardware parameter structure",
                             error);
@@ -920,6 +914,7 @@ static auto run(const std::string &playerImagePath,
        ALSA that we'll start the device ourselves.
     */
 
+    snd_pcm_sw_params_t *sw_params = nullptr;
     if (const auto error{snd_pcm_sw_params_malloc(&sw_params)}; error < 0)
       throwAlsaRuntimeError("cannot allocate software parameters structure",
                             error);
@@ -929,8 +924,8 @@ static auto run(const std::string &playerImagePath,
       throwAlsaRuntimeError("cannot initialize software parameters structure",
                             error);
 
-    if (const auto error{
-            snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params, 4096)};
+    if (const auto error{snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params,
+                                                         framesPerUpdate)};
         error < 0)
       throwAlsaRuntimeError("cannot set minimum available count", error);
 
@@ -949,15 +944,17 @@ static auto run(const std::string &playerImagePath,
     if (const auto error{snd_pcm_prepare(pcm.pcm)}; error < 0)
       throwAlsaRuntimeError("cannot prepare audio interface for use", error);
 
+    std::array<std::int16_t, 2 * framesPerUpdate> buffer{};
+    auto fileOffset{0};
+
     while (!quitAudioThread) {
-      /* wait till the interface is ready for data, or 1 second
-         has elapsed.
-      */
+      std::copy(backgroundMusicData.begin() + fileOffset,
+                backgroundMusicData.begin() + fileOffset + buffer.size(),
+                buffer.begin());
 
       if (const auto error{snd_pcm_wait(pcm.pcm, 1000)}; error < 0)
         throwAlsaRuntimeError("poll failed", error);
 
-      /* find out how much space is available for playback data */
       auto frames_to_deliver = snd_pcm_avail_update(pcm.pcm);
 
       if (frames_to_deliver < 0) {
@@ -966,23 +963,19 @@ static auto run(const std::string &playerImagePath,
         throw std::runtime_error{"unknown ALSA avail update"};
       }
 
-      frames_to_deliver = frames_to_deliver > 4096 ? 4096 : frames_to_deliver;
-
-      /* deliver the data */
+      frames_to_deliver = frames_to_deliver > framesPerUpdate
+                              ? framesPerUpdate
+                              : frames_to_deliver;
 
       if (const auto error{
-              snd_pcm_writei(pcm.pcm, buf.data(), frames_to_deliver)};
+              snd_pcm_writei(pcm.pcm, buffer.data(), frames_to_deliver)};
           error != frames_to_deliver)
         throw std::runtime_error{"write error"};
 
       fileOffset += 2 * frames_to_deliver;
 
-      if (fileOffset + buf.size() > backgroundMusicData.size())
+      if (fileOffset + buffer.size() > backgroundMusicData.size())
         fileOffset = 0;
-
-      std::copy(backgroundMusicData.begin() + fileOffset,
-                backgroundMusicData.begin() + fileOffset + buf.size(),
-                buf.begin());
     }
   }};
 
