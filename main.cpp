@@ -273,10 +273,9 @@ static auto run(const std::string &playerImagePath,
                 const std::string &backgroundMusicPath) -> int {
 
   std::atomic<bool> quitAudioThread;
-
-  alsa_wrappers::PCM pcm;
   std::thread audioThread{loopAudio, std::ref(quitAudioThread),
-                          readShortAudio(backgroundMusicPath), std::cref(pcm)};
+                          readShortAudio(backgroundMusicPath),
+                          alsa_wrappers::PCM{}};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};

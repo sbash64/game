@@ -22,8 +22,12 @@ PCM::PCM() {
 }
 
 PCM::~PCM() {
-  // snd_pcm_drain(pcm);
-  snd_pcm_close(pcm);
+  if (pcm != nullptr) {
+    // snd_pcm_drain(pcm);
+    snd_pcm_close(pcm);
+  }
 }
+
+PCM::PCM(PCM &&other) noexcept : pcm{other.pcm} { other.pcm = nullptr; }
 } // namespace alsa_wrappers
 } // namespace sbash64::game

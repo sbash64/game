@@ -11,6 +11,7 @@ namespace sbash64::game {
 namespace alsa_wrappers {
 struct PCM {
   PCM();
+  PCM(PCM &&) noexcept;
   ~PCM();
 
   snd_pcm_t *pcm{};
