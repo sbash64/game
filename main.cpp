@@ -863,21 +863,23 @@ static auto run(const std::string &playerImagePath,
                 const std::string &backgroundMusicPath) -> int {
 
   std::atomic<bool> quitAudioThread;
-  sndfile_wrappers::File backgroundMusicFile{backgroundMusicPath};
+  std::vector<short> backgroundMusicData;
+  {
+    sndfile_wrappers::File backgroundMusicFile{backgroundMusicPath};
+    backgroundMusicData.resize(backgroundMusicFile.info.frames *
+                               backgroundMusicFile.info.channels);
+    sf_readf_short(backgroundMusicFile.file, backgroundMusicData.data(),
+                   backgroundMusicFile.info.frames);
+  }
   alsa_wrappers::PCM pcm;
-  std::thread audioThread{[&quitAudioThread, &backgroundMusicFile, &pcm]() {
-    std::vector<short> backgroundMusicData(backgroundMusicFile.info.frames *
-                                           backgroundMusicFile.info.channels);
-    auto actual{sf_readf_short(backgroundMusicFile.file,
-                               backgroundMusicData.data(),
-                               backgroundMusicFile.info.frames)};
-
+  std::thread audioThread{[&quitAudioThread, &backgroundMusicData, &pcm]() {
     snd_pcm_hw_params_t *hw_params = nullptr;
     snd_pcm_sw_params_t *sw_params = nullptr;
     std::array<std::int16_t, 8192> buf{};
     auto fileOffset{0};
     std::copy(backgroundMusicData.begin() + fileOffset,
-              backgroundMusicData.begin() + fileOffset + 8192, buf.begin());
+              backgroundMusicData.begin() + fileOffset + buf.size(),
+              buf.begin());
 
     if (const auto error{snd_pcm_hw_params_malloc(&hw_params)}; error < 0)
       throwAlsaRuntimeError("cannot allocate hardware parameter structure",
@@ -975,16 +977,12 @@ static auto run(const std::string &playerImagePath,
 
       fileOffset += 2 * frames_to_deliver;
 
-      if (fileOffset + 8192 > backgroundMusicData.size())
+      if (fileOffset + buf.size() > backgroundMusicData.size())
         fileOffset = 0;
 
       std::copy(backgroundMusicData.begin() + fileOffset,
-                backgroundMusicData.begin() + fileOffset + 8192, buf.begin());
-
-      // auto counter{0};
-      // for (auto &x : buf)
-      //   x = std::numeric_limits<std::int16_t>::max() *
-      //       std::sin(2 * std::acos(-1) * 50 * counter++ / buf.size()) / 2;
+                backgroundMusicData.begin() + fileOffset + buf.size(),
+                buf.begin());
     }
   }};
 
