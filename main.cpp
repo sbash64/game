@@ -238,6 +238,9 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
   std::ptrdiff_t fileOffset{0};
 
   while (!quitAudioThread) {
+    if (fileOffset + buffer.size() > backgroundMusicData.size())
+      fileOffset = 0;
+
     std::copy(backgroundMusicData.begin() + fileOffset,
               backgroundMusicData.begin() + fileOffset + buffer.size(),
               buffer.begin());
@@ -260,8 +263,6 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
       throw std::runtime_error{"write error"};
 
     fileOffset += 2 * framesToWrite;
-    if (fileOffset + buffer.size() > backgroundMusicData.size())
-      fileOffset = 0;
   }
 }
 
