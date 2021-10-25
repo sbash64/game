@@ -48,6 +48,14 @@ Texture::Texture(SDL_Renderer *renderer, SDL_Surface *surface)
 
 Texture::~Texture() { SDL_DestroyTexture(texture); }
 
+ImageInit::ImageInit() {
+  constexpr auto imageFlags{IMG_INIT_PNG};
+  if ((IMG_Init(imageFlags) & imageFlags) == 0)
+    throwRuntimeError("SDL_image could not initialize!");
+}
+
+ImageInit::~ImageInit() { IMG_Quit(); }
+
 ImageSurface::ImageSurface(const std::string &imagePath)
     : surface{IMG_Load(imagePath.c_str())} {
   if (surface == nullptr) {

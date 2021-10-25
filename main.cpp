@@ -69,16 +69,6 @@ static auto pressing(const Uint8 *keyStates, SDL_Scancode code) -> bool {
   return keyStates[code] != 0U;
 }
 
-static void initializeSDLImage() {
-  constexpr auto imageFlags{IMG_INIT_PNG};
-  if (!(IMG_Init(imageFlags) & imageFlags)) {
-    std::stringstream stream;
-    stream << "SDL_image could not initialize! SDL_image Error: "
-           << IMG_GetError();
-    throw std::runtime_error{stream.str()};
-  }
-}
-
 static auto applyHorizontalForces(PlayerState playerState,
                                   distance_type groundFriction,
                                   distance_type playerMaxHorizontalSpeed,
@@ -293,7 +283,7 @@ static auto run(const std::string &playerImagePath,
   sdl_wrappers::Window windowWrapper{screenWidth, screenHeight};
   sdl_wrappers::Renderer rendererWrapper{windowWrapper.window};
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
-  initializeSDLImage();
+  sdl_wrappers::ImageInit sdlImageInitialization;
   sdl_wrappers::ImageSurface playerImageSurfaceWrapper{playerImagePath};
   SDL_SetColorKey(playerImageSurfaceWrapper.surface, SDL_TRUE,
                   getpixel(playerImageSurfaceWrapper.surface, 1, 9));

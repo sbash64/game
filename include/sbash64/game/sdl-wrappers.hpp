@@ -1,6 +1,7 @@
 #ifndef SBASH64_GAME_SDL_WRAPPERS_HPP_
 #define SBASH64_GAME_SDL_WRAPPERS_HPP_
 
+#include "SDL_image.h"
 #include <SDL.h>
 
 #include <string>
@@ -30,6 +31,11 @@ struct Texture {
   ~Texture();
 
   SDL_Texture *texture;
+};
+
+struct ImageInit {
+  ImageInit();
+  ~ImageInit();
 };
 
 struct ImageSurface {
