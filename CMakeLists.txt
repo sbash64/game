@@ -19,7 +19,7 @@ FetchContent_MakeAvailable(SDL_image)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-add_executable(sbash64-game-main sdl-wrappers.cpp alsa-wrappers.cpp
+add_executable(sbash64-game-main game.cpp sdl-wrappers.cpp alsa-wrappers.cpp
                                  sndfile-wrappers.cpp main.cpp)
 target_link_libraries(sbash64-game-main SDL2::image SDL2::SDL2 asound
                       Threads::Threads sndfile)
