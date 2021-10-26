@@ -91,11 +91,14 @@ static auto applyHorizontalForces(PlayerState playerState,
 
 static auto applyVerticalForces(PlayerState playerState,
                                 distance_type playerJumpAcceleration,
-                                RationalDistance gravity) -> PlayerState {
+                                RationalDistance gravity,
+                                std::atomic<bool> &playJumpSound)
+    -> PlayerState {
   const auto *keyStates{SDL_GetKeyboardState(nullptr)};
   if (pressing(keyStates, SDL_SCANCODE_UP) &&
       playerState.jumpState == JumpState::grounded) {
     playerState.jumpState = JumpState::started;
+    playJumpSound = true;
     playerState.object.velocity.vertical += playerJumpAcceleration;
   }
   playerState.object.velocity.vertical += gravity;
@@ -119,10 +122,12 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
                    &sourceSDLRect, &projection, 0, nullptr, flip);
 }
 
-static void flushEvents(bool &playing) {
+static auto pollEvents() -> bool {
   SDL_Event event;
   while (SDL_PollEvent(&event) != 0)
-    playing = event.type != SDL_QUIT;
+    if (event.type == SDL_QUIT)
+      return false;
+  return true;
 }
 
 static auto applyVelocity(PlayerState playerState) -> PlayerState {
@@ -137,19 +142,45 @@ static void throwAlsaRuntimeErrorOnFailure(const std::function<int()> &f,
 }
 
 static void loopAudio(std::atomic<bool> &quitAudioThread,
+                      std::atomic<bool> &playJumpSound,
                       const std::vector<short> &backgroundMusicData,
+                      const std::vector<short> &jumpSoundData,
                       const alsa_wrappers::PCM &pcm,
                       snd_pcm_sframes_t framesPerUpdate) {
   std::vector<std::int16_t> buffer(2 * framesPerUpdate);
-  std::ptrdiff_t fileOffset{0};
+  std::ptrdiff_t backgroundMusicDataOffset{0};
+  std::ptrdiff_t jumpSoundDataOffset{0};
+  auto playingJumpSound{false};
 
   while (!quitAudioThread) {
-    if (fileOffset + buffer.size() > backgroundMusicData.size())
-      fileOffset = 0;
+    {
+      auto expected{true};
+      if (!playingJumpSound &&
+          playJumpSound.compare_exchange_strong(expected, false)) {
+        playingJumpSound = true;
+        jumpSoundDataOffset = 0;
+      }
+    }
 
-    std::copy(backgroundMusicData.begin() + fileOffset,
-              backgroundMusicData.begin() + fileOffset + buffer.size(),
+    if (backgroundMusicDataOffset + buffer.size() > backgroundMusicData.size())
+      backgroundMusicDataOffset = 0;
+
+    std::copy(backgroundMusicData.begin() + backgroundMusicDataOffset,
+              backgroundMusicData.begin() + backgroundMusicDataOffset +
+                  buffer.size(),
               buffer.begin());
+
+    if (playingJumpSound) {
+      if (jumpSoundDataOffset + (buffer.size() + 1) / 2 >
+          jumpSoundData.size()) {
+        playingJumpSound = false;
+      } else {
+        auto counter{0};
+        for (auto &x : buffer) {
+          x += jumpSoundData[jumpSoundDataOffset + counter++ / 2];
+        }
+      }
+    }
 
     throwAlsaRuntimeErrorOnFailure(
         [&pcm]() { return snd_pcm_wait(pcm.pcm, 1000); }, "poll failed");
@@ -169,7 +200,11 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
         framesWritten != framesToWrite)
       throw std::runtime_error{"write error"};
 
-    fileOffset += 2 * framesToWrite;
+    backgroundMusicDataOffset += 2 * framesToWrite;
+
+    if (playingJumpSound) {
+      jumpSoundDataOffset += framesToWrite;
+    }
   }
 }
 
@@ -212,6 +247,29 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
                                                &desiredSampleRate, &direction);
       },
       "cannot set sample rate");
+  throwAlsaRuntimeErrorOnFailure(
+      [&pcm, hw_params]() {
+        snd_pcm_uframes_t desiredPeriodSize{8192};
+        auto direction{0};
+        return snd_pcm_hw_params_set_period_size_near(
+            pcm.pcm, hw_params, &desiredPeriodSize, &direction);
+      },
+      "cannot set period size");
+  throwAlsaRuntimeErrorOnFailure(
+      [&pcm, hw_params]() {
+        unsigned int desiredPeriods{2};
+        auto direction{0};
+        return snd_pcm_hw_params_set_periods_near(pcm.pcm, hw_params,
+                                                  &desiredPeriods, &direction);
+      },
+      "cannot set periods");
+  // throwAlsaRuntimeErrorOnFailure(
+  //     [hw_params]() {
+  //       snd_pcm_uframes_t bufferSize{0};
+  //       auto error = snd_pcm_hw_params_get_buffer_size(hw_params,
+  //       &bufferSize); std::cout << bufferSize << '\n'; return error;
+  //     },
+  //     "cannot get buffer size");
   throwAlsaRuntimeErrorOnFailure(
       [&pcm, hw_params]() {
         return snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2);
@@ -263,13 +321,18 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
 static auto run(const std::string &playerImagePath,
                 const std::string &backgroundImagePath,
                 const std::string &enemyImagePath,
-                const std::string &backgroundMusicPath) -> int {
-
+                const std::string &backgroundMusicPath,
+                const std::string &jumpSoundPath) -> int {
   std::atomic<bool> quitAudioThread;
+  std::atomic<bool> playJumpSound;
   const auto framesPerUpdate{4096};
-  std::thread audioThread{loopAudio, std::ref(quitAudioThread),
+  std::thread audioThread{loopAudio,
+                          std::ref(quitAudioThread),
+                          std::ref(playJumpSound),
                           readShortAudio(backgroundMusicPath),
-                          initializeAlsaPcm(framesPerUpdate), framesPerUpdate};
+                          readShortAudio(jumpSoundPath),
+                          initializeAlsaPcm(framesPerUpdate),
+                          framesPerUpdate};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
@@ -324,14 +387,12 @@ static auto run(const std::string &playerImagePath,
   const Rectangle pipeRectangle{
       Point{448, topEdge(floorRectangle) - pipeHeight}, 30, pipeHeight};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
-  auto playing{true};
-  while (playing) {
-    flushEvents(playing);
+  while (pollEvents()) {
     playerState = handleVerticalCollisions(
         applyVerticalForces(applyHorizontalForces(playerState, groundFriction,
                                                   playerMaxHorizontalSpeed,
                                                   playerRunAcceleration),
-                            playerJumpAcceleration, gravity),
+                            playerJumpAcceleration, gravity, playJumpSound),
         {blockRectangle, pipeRectangle}, {blockRectangle}, floorRectangle);
     playerState.object = handleHorizontalCollisions(
         {playerState.object.rectangle, playerState.object.velocity},
@@ -375,11 +436,11 @@ static auto run(const std::string &playerImagePath,
 int main(int argc, char *argv[]) {
   std::span<char *> arguments{argv,
                               static_cast<std::span<char *>::size_type>(argc)};
-  if (arguments.size() < 5)
+  if (arguments.size() < 6)
     return EXIT_FAILURE;
   try {
     return sbash64::game::run(arguments[1], arguments[2], arguments[3],
-                              arguments[4]);
+                              arguments[4], arguments[5]);
   } catch (const std::runtime_error &e) {
     std::cerr << e.what() << '\n';
     return EXIT_FAILURE;
