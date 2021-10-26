@@ -119,15 +119,6 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
                    &sourceSDLRect, &projection, 0, nullptr, flip);
 }
 
-static void
-presentFlippedHorizontally(const sdl_wrappers::Renderer &rendererWrapper,
-                           const sdl_wrappers::Texture &textureWrapper,
-                           const Rectangle &sourceRectangle, int pixelScale,
-                           const Rectangle &destinationRectangle) {
-  present(rendererWrapper, textureWrapper, sourceRectangle, pixelScale,
-          destinationRectangle, SDL_FLIP_HORIZONTAL);
-}
-
 static void flushEvents(bool &playing) {
   SDL_Event event;
   while (SDL_PollEvent(&event) != 0)
@@ -184,12 +175,10 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
 
 static auto readShortAudio(const std::string &path) -> std::vector<short> {
   std::vector<short> audio;
-  {
-    sndfile_wrappers::File file{path};
-    audio.resize(static_cast<std::vector<short>::size_type>(
-        file.info.frames * file.info.channels));
-    sf_readf_short(file.file, audio.data(), file.info.frames);
-  }
+  sndfile_wrappers::File file{path};
+  audio.resize(static_cast<std::vector<short>::size_type>(file.info.frames *
+                                                          file.info.channels));
+  sf_readf_short(file.file, audio.data(), file.info.frames);
   return audio;
 }
 
@@ -366,17 +355,15 @@ static auto run(const std::string &playerImagePath,
             {Point{0, 0}, cameraWidth, cameraHeight});
     present(rendererWrapper, enemyTextureWrapper, enemySourceRect, pixelScale,
             shiftHorizontally(enemy.rectangle,
-                              -leftEdge(backgroundSourceRectangle)));
-    if (playerState.directionFacing == DirectionFacing::right)
-      present(rendererWrapper, playerTextureWrapper, playerSourceRect,
-              pixelScale,
-              shiftHorizontally(playerState.object.rectangle,
-                                -leftEdge(backgroundSourceRectangle)));
-    else
-      presentFlippedHorizontally(
-          rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
-          shiftHorizontally(playerState.object.rectangle,
-                            -leftEdge(backgroundSourceRectangle)));
+                              -leftEdge(backgroundSourceRectangle)),
+            enemy.velocity.horizontal < 0 ? SDL_FLIP_HORIZONTAL
+                                          : SDL_FLIP_NONE);
+    present(rendererWrapper, playerTextureWrapper, playerSourceRect, pixelScale,
+            shiftHorizontally(playerState.object.rectangle,
+                              -leftEdge(backgroundSourceRectangle)),
+            playerState.directionFacing == DirectionFacing::right
+                ? SDL_FLIP_NONE
+                : SDL_FLIP_HORIZONTAL);
     SDL_RenderPresent(rendererWrapper.renderer);
   }
   quitAudioThread = true;
