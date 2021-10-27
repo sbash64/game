@@ -146,8 +146,8 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
                       const std::vector<short> &backgroundMusicData,
                       const std::vector<short> &jumpSoundData,
                       const alsa_wrappers::PCM &pcm,
-                      snd_pcm_sframes_t framesPerUpdate) {
-  std::vector<std::int16_t> buffer(2 * framesPerUpdate);
+                      snd_pcm_uframes_t periodSize) {
+  std::vector<std::int16_t> buffer(2 * periodSize);
   std::ptrdiff_t backgroundMusicDataOffset{0};
   std::ptrdiff_t jumpSoundDataOffset{0};
   auto playingJumpSound{false};
@@ -176,42 +176,26 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
         playingJumpSound = false;
       } else {
         auto counter{0};
-        for (auto &x : buffer) {
+        for (auto &x : buffer)
           x += jumpSoundData[jumpSoundDataOffset + counter++ / 2];
-        }
       }
     }
 
     throwAlsaRuntimeErrorOnFailure(
-        [&pcm]() { return snd_pcm_wait(pcm.pcm, -1); }, "poll failed");
+        [&pcm]() { return snd_pcm_wait(pcm.pcm, -1); }, "wait failed");
 
-    // if (framesReadyToWrite < 0) {
-    //   if (framesReadyToWrite == -EPIPE)
-    //     throw std::runtime_error{"an xrun occured"};
-    //   throw std::runtime_error{"unknown ALSA avail update"};
-    // }
-
-    // const auto framesToWrite{framesReadyToWrite > framesPerUpdate
-    //                              ? framesPerUpdate
-    //                              : framesReadyToWrite};
-    // if (const auto framesWritten{
-    //         snd_pcm_writei(pcm.pcm, buffer.data(), framesPerUpdate)};
-    //     framesWritten != framesPerUpdate)
-    //   throw std::runtime_error{"write error"};
     if (const auto framesWritten{
-            snd_pcm_writei(pcm.pcm, buffer.data(), framesPerUpdate)};
+            snd_pcm_writei(pcm.pcm, buffer.data(), periodSize)};
         framesWritten < 0)
       throwAlsaRuntimeErrorOnFailure(
           [&pcm, framesWritten]() {
-            return snd_pcm_recover(pcm.pcm, framesWritten, 1);
+            return snd_pcm_recover(pcm.pcm, static_cast<int>(framesWritten), 0);
           },
           "recover failed");
     else {
-      backgroundMusicDataOffset += 2 * framesPerUpdate;
-
-      if (playingJumpSound) {
-        jumpSoundDataOffset += framesPerUpdate;
-      }
+      backgroundMusicDataOffset += 2 * periodSize;
+      if (playingJumpSound)
+        jumpSoundDataOffset += periodSize;
     }
   }
 }
@@ -225,7 +209,7 @@ static auto readShortAudio(const std::string &path) -> std::vector<short> {
   return audio;
 }
 
-static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
+static auto initializeAlsaPcm(snd_pcm_uframes_t periodSize)
     -> alsa_wrappers::PCM {
   alsa_wrappers::PCM pcm;
   snd_pcm_hw_params_t *hw_params = nullptr;
@@ -256,8 +240,8 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
       },
       "cannot set sample rate");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, hw_params, framesPerUpdate]() {
-        snd_pcm_uframes_t desiredPeriodSize{framesPerUpdate};
+      [&pcm, hw_params, periodSize]() {
+        snd_pcm_uframes_t desiredPeriodSize{periodSize};
         auto direction{0};
         return snd_pcm_hw_params_set_period_size(pcm.pcm, hw_params,
                                                  desiredPeriodSize, direction);
@@ -271,13 +255,6 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
                                                   &desiredPeriods, &direction);
       },
       "cannot set periods");
-  // throwAlsaRuntimeErrorOnFailure(
-  //     [hw_params]() {
-  //       snd_pcm_uframes_t bufferSize{0};
-  //       auto error = snd_pcm_hw_params_get_buffer_size(hw_params,
-  //       &bufferSize); std::cout << bufferSize << '\n'; return error;
-  //     },
-  //     "cannot get buffer size");
   throwAlsaRuntimeErrorOnFailure(
       [&pcm, hw_params]() {
         return snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2);
@@ -287,11 +264,6 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
       [&pcm, hw_params]() { return snd_pcm_hw_params(pcm.pcm, hw_params); },
       "cannot set parameters");
   snd_pcm_hw_params_free(hw_params);
-
-  /* tell ALSA to wake us up whenever 4096 or more frames
-     of playback data can be delivered. Also, tell
-     ALSA that we'll start the device ourselves.
-  */
 
   snd_pcm_sw_params_t *sw_params = nullptr;
   throwAlsaRuntimeErrorOnFailure(
@@ -303,28 +275,20 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
       },
       "cannot initialize software parameters structure");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, sw_params, framesPerUpdate]() {
-        return snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params,
-                                               framesPerUpdate);
+      [&pcm, sw_params, periodSize]() {
+        return snd_pcm_sw_params_set_avail_min(pcm.pcm, sw_params, periodSize);
       },
       "cannot set minimum available count");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, sw_params, framesPerUpdate]() {
+      [&pcm, sw_params, periodSize]() {
         return snd_pcm_sw_params_set_start_threshold(pcm.pcm, sw_params,
-                                                     2 * framesPerUpdate);
+                                                     2 * periodSize);
       },
       "cannot set start mode");
   throwAlsaRuntimeErrorOnFailure(
       [&pcm, sw_params]() { return snd_pcm_sw_params(pcm.pcm, sw_params); },
       "cannot set software parameters");
 
-  /* the interface will interrupt the kernel every 4096 frames, and ALSA
-     will wake up this program very soon after that.
-  */
-
-  // throwAlsaRuntimeErrorOnFailure([&pcm]() { return snd_pcm_prepare(pcm.pcm);
-  // },
-  //                                "cannot prepare audio interface for use");
   return pcm;
 }
 
@@ -335,14 +299,14 @@ static auto run(const std::string &playerImagePath,
                 const std::string &jumpSoundPath) -> int {
   std::atomic<bool> quitAudioThread;
   std::atomic<bool> playJumpSound;
-  const auto framesPerUpdate{512};
+  const auto alsaPeriodSize{512};
   std::thread audioThread{loopAudio,
                           std::ref(quitAudioThread),
                           std::ref(playJumpSound),
                           readShortAudio(backgroundMusicPath),
                           readShortAudio(jumpSoundPath),
-                          initializeAlsaPcm(framesPerUpdate),
-                          framesPerUpdate};
+                          initializeAlsaPcm(alsaPeriodSize),
+                          alsaPeriodSize};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
