@@ -141,6 +141,20 @@ static void throwAlsaRuntimeErrorOnFailure(const std::function<int()> &f,
     throwAlsaRuntimeError(message, error);
 }
 
+static int wait_for_poll(snd_pcm_t *handle, struct pollfd *ufds,
+                         unsigned int count) {
+  unsigned short revents;
+
+  while (1) {
+    poll(ufds, count, -1);
+    snd_pcm_poll_descriptors_revents(handle, ufds, count, &revents);
+    if (revents & POLLERR)
+      return -EIO;
+    if (revents & POLLOUT)
+      return 0;
+  }
+}
+
 static void loopAudio(std::atomic<bool> &quitAudioThread,
                       std::atomic<bool> &playJumpSound,
                       const std::vector<short> &backgroundMusicData,
@@ -151,6 +165,16 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
   std::ptrdiff_t backgroundMusicDataOffset{0};
   std::ptrdiff_t jumpSoundDataOffset{0};
   auto playingJumpSound{false};
+
+  const auto count = snd_pcm_poll_descriptors_count(pcm.pcm);
+  if (count <= 0)
+    throw std::runtime_error{"Invalid poll descriptors count"};
+  std::vector<pollfd> ufds(count);
+  throwAlsaRuntimeErrorOnFailure(
+      [&pcm, &ufds] {
+        return snd_pcm_poll_descriptors(pcm.pcm, ufds.data(), ufds.size());
+      },
+      "Unable to obtain poll descriptors for playback");
 
   while (!quitAudioThread) {
     {
@@ -183,27 +207,35 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
     }
 
     throwAlsaRuntimeErrorOnFailure(
-        [&pcm]() { return snd_pcm_wait(pcm.pcm, 1000); }, "poll failed");
+        [&pcm, &ufds]() {
+          return wait_for_poll(pcm.pcm, ufds.data(), ufds.size());
+        },
+        "poll failed");
 
-    const auto framesReadyToWrite{snd_pcm_avail_update(pcm.pcm)};
-    if (framesReadyToWrite < 0) {
-      if (framesReadyToWrite == -EPIPE)
-        throw std::runtime_error{"an xrun occured"};
-      throw std::runtime_error{"unknown ALSA avail update"};
-    }
+    // const auto framesReadyToWrite{snd_pcm_avail_update(pcm.pcm)};
+    // std::cout << framesReadyToWrite << '\n';
+    // if (framesReadyToWrite < 0) {
+    //   if (framesReadyToWrite == -EPIPE)
+    //     throw std::runtime_error{"an xrun occured"};
+    //   throw std::runtime_error{"unknown ALSA avail update"};
+    // }
 
-    const auto framesToWrite{framesReadyToWrite > framesPerUpdate
-                                 ? framesPerUpdate
-                                 : framesReadyToWrite};
-    if (const auto framesWritten{
-            snd_pcm_writei(pcm.pcm, buffer.data(), framesToWrite)};
-        framesWritten != framesToWrite)
-      throw std::runtime_error{"write error"};
-
-    backgroundMusicDataOffset += 2 * framesToWrite;
+    // const auto framesToWrite{framesReadyToWrite > framesPerUpdate
+    //                              ? framesPerUpdate
+    //                              : framesReadyToWrite};
+    // if (const auto framesWritten{
+    //         snd_pcm_writei(pcm.pcm, buffer.data(), framesPerUpdate)};
+    //     framesWritten != framesPerUpdate)
+    //   throw std::runtime_error{"write error"};
+    const auto framesWritten{
+        snd_pcm_writei(pcm.pcm, buffer.data(), framesPerUpdate)};
+    if (framesWritten < framesPerUpdate)
+      throwAlsaRuntimeErrorOnFailure(
+          [&pcm]() { return snd_pcm_prepare(pcm.pcm); }, "prepare failed");
+    backgroundMusicDataOffset += 2 * framesWritten;
 
     if (playingJumpSound) {
-      jumpSoundDataOffset += framesToWrite;
+      jumpSoundDataOffset += framesWritten;
     }
   }
 }
@@ -248,11 +280,11 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
       },
       "cannot set sample rate");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, hw_params]() {
-        snd_pcm_uframes_t desiredPeriodSize{8192};
+      [&pcm, hw_params, framesPerUpdate]() {
+        snd_pcm_uframes_t desiredPeriodSize{framesPerUpdate};
         auto direction{0};
-        return snd_pcm_hw_params_set_period_size_near(
-            pcm.pcm, hw_params, &desiredPeriodSize, &direction);
+        return snd_pcm_hw_params_set_period_size(pcm.pcm, hw_params,
+                                                 desiredPeriodSize, direction);
       },
       "cannot set period size");
   throwAlsaRuntimeErrorOnFailure(
@@ -326,7 +358,7 @@ static auto run(const std::string &playerImagePath,
                 const std::string &jumpSoundPath) -> int {
   std::atomic<bool> quitAudioThread;
   std::atomic<bool> playJumpSound;
-  const auto framesPerUpdate{4096};
+  const auto framesPerUpdate{512};
   std::thread audioThread{loopAudio,
                           std::ref(quitAudioThread),
                           std::ref(playJumpSound),
