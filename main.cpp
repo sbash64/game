@@ -313,8 +313,9 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t framesPerUpdate)
      will wake up this program very soon after that.
   */
 
-  throwAlsaRuntimeErrorOnFailure([&pcm]() { return snd_pcm_prepare(pcm.pcm); },
-                                 "cannot prepare audio interface for use");
+  // throwAlsaRuntimeErrorOnFailure([&pcm]() { return snd_pcm_prepare(pcm.pcm);
+  // },
+  //                                "cannot prepare audio interface for use");
   return pcm;
 }
 
