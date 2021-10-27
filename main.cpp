@@ -141,20 +141,6 @@ static void throwAlsaRuntimeErrorOnFailure(const std::function<int()> &f,
     throwAlsaRuntimeError(message, error);
 }
 
-static int wait_for_poll(snd_pcm_t *handle, struct pollfd *ufds,
-                         unsigned int count) {
-  unsigned short revents;
-
-  while (1) {
-    poll(ufds, count, -1);
-    snd_pcm_poll_descriptors_revents(handle, ufds, count, &revents);
-    if (revents & POLLERR)
-      return -EIO;
-    if (revents & POLLOUT)
-      return 0;
-  }
-}
-
 static void loopAudio(std::atomic<bool> &quitAudioThread,
                       std::atomic<bool> &playJumpSound,
                       const std::vector<short> &backgroundMusicData,
@@ -166,15 +152,15 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
   std::ptrdiff_t jumpSoundDataOffset{0};
   auto playingJumpSound{false};
 
-  const auto count = snd_pcm_poll_descriptors_count(pcm.pcm);
-  if (count <= 0)
-    throw std::runtime_error{"Invalid poll descriptors count"};
-  std::vector<pollfd> ufds(count);
-  throwAlsaRuntimeErrorOnFailure(
-      [&pcm, &ufds] {
-        return snd_pcm_poll_descriptors(pcm.pcm, ufds.data(), ufds.size());
-      },
-      "Unable to obtain poll descriptors for playback");
+  // const auto count = snd_pcm_poll_descriptors_count(pcm.pcm);
+  // if (count <= 0)
+  //   throw std::runtime_error{"Invalid poll descriptors count"};
+  // std::vector<pollfd> ufds(count);
+  // throwAlsaRuntimeErrorOnFailure(
+  //     [&pcm, &ufds] {
+  //       return snd_pcm_poll_descriptors(pcm.pcm, ufds.data(), ufds.size());
+  //     },
+  //     "Unable to obtain poll descriptors for playback");
 
   while (!quitAudioThread) {
     {
@@ -207,10 +193,7 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
     }
 
     throwAlsaRuntimeErrorOnFailure(
-        [&pcm, &ufds]() {
-          return wait_for_poll(pcm.pcm, ufds.data(), ufds.size());
-        },
-        "poll failed");
+        [&pcm]() { return snd_pcm_wait(pcm.pcm, -1); }, "poll failed");
 
     // const auto framesReadyToWrite{snd_pcm_avail_update(pcm.pcm)};
     // std::cout << framesReadyToWrite << '\n';
