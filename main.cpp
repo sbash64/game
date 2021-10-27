@@ -32,6 +32,8 @@
 #include <SDL_stdinc.h>
 #include <SDL_surface.h>
 
+#include <pthread.h>
+
 // https://stackoverflow.com/a/53067795
 static auto getpixel(SDL_Surface *surface, int x, int y) -> Uint32 {
   const auto bpp{surface->format->BytesPerPixel};
@@ -171,8 +173,7 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
               buffer.begin());
 
     if (playingJumpSound) {
-      if (jumpSoundDataOffset + (buffer.size() + 1) / 2 >
-          jumpSoundData.size()) {
+      if (jumpSoundDataOffset + periodSize > jumpSoundData.size()) {
         playingJumpSound = false;
       } else {
         auto counter{0};
@@ -307,6 +308,17 @@ static auto run(const std::string &playerImagePath,
                           readShortAudio(jumpSoundPath),
                           initializeAlsaPcm(alsaPeriodSize),
                           std::vector<std::int16_t>(2 * alsaPeriodSize)};
+  {
+    pthread_attr_t thAttr;
+    pthread_attr_init(&thAttr);
+
+    int policy = 0;
+    pthread_attr_getschedpolicy(&thAttr, &policy);
+
+    pthread_setschedprio(audioThread.native_handle(),
+                         sched_get_priority_max(policy));
+    pthread_attr_destroy(&thAttr);
+  }
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
