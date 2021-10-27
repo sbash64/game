@@ -146,8 +146,8 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
                       const std::vector<short> &backgroundMusicData,
                       const std::vector<short> &jumpSoundData,
                       const alsa_wrappers::PCM &pcm,
-                      snd_pcm_uframes_t periodSize) {
-  std::vector<std::int16_t> buffer(2 * periodSize);
+                      std::vector<std::int16_t> buffer) {
+  const auto periodSize{buffer.size() / 2};
   std::ptrdiff_t backgroundMusicDataOffset{0};
   std::ptrdiff_t jumpSoundDataOffset{0};
   auto playingJumpSound{false};
@@ -306,7 +306,7 @@ static auto run(const std::string &playerImagePath,
                           readShortAudio(backgroundMusicPath),
                           readShortAudio(jumpSoundPath),
                           initializeAlsaPcm(alsaPeriodSize),
-                          alsaPeriodSize};
+                          std::vector<std::int16_t>(2 * alsaPeriodSize)};
 
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
