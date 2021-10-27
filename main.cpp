@@ -309,15 +309,8 @@ static auto run(const std::string &playerImagePath,
                           initializeAlsaPcm(alsaPeriodSize),
                           std::vector<std::int16_t>(2 * alsaPeriodSize)};
   {
-    pthread_attr_t thAttr;
-    pthread_attr_init(&thAttr);
-
-    int policy = 0;
-    pthread_attr_getschedpolicy(&thAttr, &policy);
-
-    pthread_setschedprio(audioThread.native_handle(),
-                         sched_get_priority_max(policy));
-    pthread_attr_destroy(&thAttr);
+    sched_param param{sched_get_priority_max(SCHED_RR)};
+    pthread_setschedparam(audioThread.native_handle(), SCHED_RR, &param);
   }
 
   sdl_wrappers::Init sdlInitialization;
