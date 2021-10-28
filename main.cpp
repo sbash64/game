@@ -316,21 +316,6 @@ static auto run(const std::string &playerImagePath,
                 const std::string &enemyImagePath,
                 const std::string &backgroundMusicPath,
                 const std::string &jumpSoundPath) -> int {
-  std::atomic<bool> quitAudioThread;
-  std::atomic<bool> playJumpSound;
-  const auto alsaPeriodSize{512};
-  std::thread audioThread{loopAudio,
-                          std::ref(quitAudioThread),
-                          std::ref(playJumpSound),
-                          readShortAudio(backgroundMusicPath),
-                          readShortAudio(jumpSoundPath),
-                          initializeAlsaPcm(alsaPeriodSize),
-                          std::vector<std::int16_t>(2 * alsaPeriodSize)};
-  {
-    sched_param param{sched_get_priority_max(SCHED_RR)};
-    pthread_setschedparam(audioThread.native_handle(), SCHED_RR, &param);
-  }
-
   sdl_wrappers::Init sdlInitialization;
   constexpr auto pixelScale{4};
   const auto cameraWidth{256};
@@ -384,6 +369,21 @@ static auto run(const std::string &playerImagePath,
   const Rectangle pipeRectangle{
       Point{448, topEdge(floorRectangle) - pipeHeight}, 30, pipeHeight};
   Rectangle backgroundSourceRectangle{Point{0, 0}, cameraWidth, cameraHeight};
+
+  std::atomic<bool> quitAudioThread;
+  std::atomic<bool> playJumpSound;
+  const auto alsaPeriodSize{512};
+  std::thread audioThread{loopAudio,
+                          std::ref(quitAudioThread),
+                          std::ref(playJumpSound),
+                          readShortAudio(backgroundMusicPath),
+                          readShortAudio(jumpSoundPath),
+                          initializeAlsaPcm(alsaPeriodSize),
+                          std::vector<std::int16_t>(2 * alsaPeriodSize)};
+  {
+    sched_param param{sched_get_priority_max(SCHED_RR)};
+    pthread_setschedparam(audioThread.native_handle(), SCHED_RR, &param);
+  }
   while (pollEvents()) {
     playerState = handleVerticalCollisions(
         applyVerticalForces(applyHorizontalForces(playerState, groundFriction,
