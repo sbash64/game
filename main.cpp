@@ -1,9 +1,11 @@
 #include <algorithm>
+#include <alsa/output.h>
 #include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
@@ -248,14 +250,21 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t periodSize)
                                                  desiredPeriodSize, direction);
       },
       "cannot set period size");
+  unsigned int periods{2};
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, hw_params]() {
-        unsigned int desiredPeriods{2};
+      [&pcm, hw_params, &periods]() {
         auto direction{0};
-        return snd_pcm_hw_params_set_periods_near(pcm.pcm, hw_params,
-                                                  &desiredPeriods, &direction);
+        return snd_pcm_hw_params_set_periods_near(pcm.pcm, hw_params, &periods,
+                                                  &direction);
       },
       "cannot set periods");
+  snd_pcm_uframes_t bufferSize{periods * periodSize};
+  throwAlsaRuntimeErrorOnFailure(
+      [&pcm, hw_params, &bufferSize]() {
+        return snd_pcm_hw_params_set_buffer_size_near(pcm.pcm, hw_params,
+                                                      &bufferSize);
+      },
+      "cannot set buffer size");
   throwAlsaRuntimeErrorOnFailure(
       [&pcm, hw_params]() {
         return snd_pcm_hw_params_set_channels(pcm.pcm, hw_params, 2);
@@ -281,14 +290,23 @@ static auto initializeAlsaPcm(snd_pcm_uframes_t periodSize)
       },
       "cannot set minimum available count");
   throwAlsaRuntimeErrorOnFailure(
-      [&pcm, sw_params, periodSize]() {
-        return snd_pcm_sw_params_set_start_threshold(pcm.pcm, sw_params,
-                                                     2 * periodSize);
+      [&pcm, sw_params, bufferSize, periodSize]() {
+        return snd_pcm_sw_params_set_start_threshold(
+            pcm.pcm, sw_params, (bufferSize / periodSize) * periodSize);
       },
-      "cannot set start mode");
+      "cannot set start threshold");
   throwAlsaRuntimeErrorOnFailure(
       [&pcm, sw_params]() { return snd_pcm_sw_params(pcm.pcm, sw_params); },
       "cannot set software parameters");
+
+  snd_output_t *debugOutput{};
+  throwAlsaRuntimeErrorOnFailure(
+      [&debugOutput]() {
+        return snd_output_stdio_attach(&debugOutput, stdout, 0);
+      },
+      "cannot initialize stdio output");
+  snd_pcm_dump(pcm.pcm, debugOutput);
+  snd_output_close(debugOutput);
 
   return pcm;
 }
