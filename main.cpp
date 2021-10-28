@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <alsa/output.h>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -126,7 +125,7 @@ static void present(const sdl_wrappers::Renderer &rendererWrapper,
                    &sourceSDLRect, &projection, 0, nullptr, flip);
 }
 
-static auto pollEvents() -> bool {
+static auto pollSdlEvents() -> bool {
   SDL_Event event;
   while (SDL_PollEvent(&event) != 0)
     if (event.type == SDL_QUIT)
@@ -150,7 +149,7 @@ static void loopAudio(std::atomic<bool> &quitAudioThread,
                       const std::vector<short> &backgroundMusicData,
                       const std::vector<short> &jumpSoundData,
                       const alsa_wrappers::PCM &pcm,
-                      std::vector<std::int16_t> buffer) {
+                      std::vector<short> buffer) {
   const auto periodSize{buffer.size() / 2};
   std::ptrdiff_t backgroundMusicDataOffset{0};
   std::ptrdiff_t jumpSoundDataOffset{0};
@@ -379,12 +378,12 @@ static auto run(const std::string &playerImagePath,
                           readShortAudio(backgroundMusicPath),
                           readShortAudio(jumpSoundPath),
                           initializeAlsaPcm(alsaPeriodSize),
-                          std::vector<std::int16_t>(2 * alsaPeriodSize)};
+                          std::vector<short>(2 * alsaPeriodSize)};
   {
     sched_param param{sched_get_priority_max(SCHED_RR)};
     pthread_setschedparam(audioThread.native_handle(), SCHED_RR, &param);
   }
-  while (pollEvents()) {
+  while (pollSdlEvents()) {
     playerState = handleVerticalCollisions(
         applyVerticalForces(applyHorizontalForces(playerState, groundFriction,
                                                   playerMaxHorizontalSpeed,
