@@ -12,6 +12,9 @@ namespace alsa_wrappers {
 struct PCM {
   PCM();
   PCM(PCM &&) noexcept;
+  auto operator=(PCM &&) -> PCM & = delete;
+  PCM(const PCM &) = delete;
+  auto operator=(const PCM &) -> PCM & = delete;
   ~PCM();
 
   snd_pcm_t *pcm{};

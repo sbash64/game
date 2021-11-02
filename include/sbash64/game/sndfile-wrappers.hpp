@@ -7,8 +7,13 @@
 
 namespace sbash64::game::sndfile_wrappers {
 struct File {
-  File(const std::string &path);
+  explicit File(const std::string &path);
   ~File();
+
+  File(File &&) = delete;
+  auto operator=(File &&) -> File & = delete;
+  File(const File &) = delete;
+  auto operator=(const File &) -> File & = delete;
 
   SF_INFO info{};
   SNDFILE *file;
