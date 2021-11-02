@@ -1,7 +1,7 @@
 #ifndef SBASH64_GAME_ALSA_WRAPPERS_HPP_
 #define SBASH64_GAME_ALSA_WRAPPERS_HPP_
 
-#include <asoundlib.h>
+#include <alsa/asoundlib.h>
 
 #include <string_view>
 
